@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "horodatageMs": 1700000000000,
+  "etat": {
+    "version": 1,
+    "magicien": { "nom": "<img src=x onerror=alert(1)>", "clicsCumules": 42, "degatsCumules": 12345.5, "monstresTues": 137 },
+    "bourse": {
+      "or": 98765.25,
+      "renommee": 30,
+      "eclatsPossedes": 58,
+      "eclatsDepensables": 12,
+      "pointsAscension": 0
+    },
+    "ecoles": {
+      "feu": { "niveau": 27, "debloquee": true, "revelee": true },
+      "glace": { "niveau": 6, "debloquee": true, "revelee": true },
+      "ecole3": { "niveau": 0, "debloquee": false, "revelee": true },
+      "ecole4": { "niveau": 0, "debloquee": false, "revelee": false },
+      "ecole5": { "niveau": 0, "debloquee": false, "revelee": false },
+      "lumiere": { "niveau": 0, "debloquee": false, "revelee": false }
+    },
+    "sorts": {
+      "sort-feu": { "debloque": true, "cooldownRestantMs": 1200, "autoCast": false },
+      "sort-glace": { "debloque": true, "cooldownRestantMs": 0, "autoCast": false }
+    },
+    "combat": {
+      "zone": 5,
+      "vague": 3,
+      "phase": "vague",
+      "cible": { "nom": "", "pvMax": 250.5, "pvCourants": 120.25, "orAuMeurtre": 60.5 },
+      "timerBossRestantMs": null
+    },
+    "paliersAmeliorations": { "amelioration-1": 3 },
+    "paliersEquipement": { "equipement-1": 2 },
+    "quetesAccomplies": ["quete-zone-2", "quete-tuer-100"],
+    "prestige": {
+      "prestigesDuCycle": 2,
+      "prestigesTotal": 2,
+      "zoneMaxDuRun": 5,
+      "eclatsCumulesAVie": 58,
+      "rangsArbreEclats": { "eclats-degats-1": 2, "eclats-or-1": 1 }
+    },
+    "ascension": {
+      "ascensionsEffectuees": 0,
+      "rangsArbreAscension": {},
+      "sixiemeEcoleDebloquee": false
+    },
+    "partieTerminee": false,
+    "tempsJeuMs": 3600000,
+    "ticksEcoules": 36000,
+    "ticksRattrapes": 35000,
+    "iterationsCombat": 41000,
+    "resteDeltaMs": 37.5,
+    "derniereSauvegardeMs": 1700000000000,
+    "tempsHorsLigneMs": 0
+  }
+}

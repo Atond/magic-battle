@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "horodatageMs": 1700000000000,
+  "etat": {
+    "version": 1,
+    "magicien": { "nom": "Magicien", "clicsCumules": 42, "degatsCumules": 12345.5, "monstresTues": 137 },
+    "bourse": {
+      "or": 98765.25,
+      "renommee": 30,
+      "eclatsPossedes": 58,
+      "eclatsDepensables": 12,
+      "pointsAscension": 0
+    },
+    "ecoles": {
+      "feu": { "niveau": 27, "debloquee": true, "revelee": true },
+      "glace": { "niveau": 6, "debloquee": true, "revelee": true },
+      "ecole3": { "niveau": 0, "debloquee": false, "revelee": true },
+      "ecole4": { "niveau": 0, "debloquee": false, "revelee": false },
+      "ecole5": { "niveau": 0, "debloquee": false, "revelee": false },
+      "lumiere": { "niveau": 0, "debloquee": false, "revelee": false }
+    },
+    "sorts": {
+      "sort-feu": { "debloque": true, "cooldownRestantMs": 1200, "autoCast": false },
+      "sort-glace": { "debloque": true, "cooldownRestantMs": 0, "autoCast": 
