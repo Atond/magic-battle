@@ -32,8 +32,11 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - name: bash scripts/verify.sh
-        run: bash scripts/verify.sh
+      # --strict : en CI, une étape « ignorée » est un échec. La tolérance par défaut de verify.sh sert
+      # au travail local ; ici, un node_modules absent ou un script npm disparu du package.json doit
+      # rougir au lieu de produire un vert trompeur. Branché depuis T-16, les 7 étapes existant toutes.
+      - name: bash scripts/verify.sh --strict
+        run: bash scripts/verify.sh --strict
       - name: Archiver le site construit
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
