@@ -5,6 +5,7 @@
 
 export {
   creerBoss,
+  creerBossFinal,
   creerMonstre,
   facteurZone,
   multOrZone,
@@ -12,8 +13,10 @@ export {
   orPourDegats,
   pvBaseVague1,
   pvBoss,
+  pvBossFinal,
   pvCumulVagues,
   pvVague,
+  timerBossFinalMs,
   timerBossMs,
   vaguesNettoyees,
 } from './formules.ts'

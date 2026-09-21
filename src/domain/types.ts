@@ -258,6 +258,33 @@ export interface EtatAscension {
   readonly sixiemeEcoleDebloquee: boolean
 }
 
+/**
+ * EXG-28 — combat du boss final **en cours**, dans sa zone dédiée. Il vit à part d'`EtatCombat` et
+ * c'est délibéré : la zone dédiée n'est pas sur l'échelle de progression (`ConstantesFin.zoneBossFinal`
+ * est un nom), donc elle ne doit jamais traverser `combat.zone` — sinon elle gonflerait `zoneMaxDuRun`,
+ * donc le gain d'Éclats d'EXG-18, et le chemin chaud du tick devrait la tester à chaque pas (EXG-30).
+ * Ce qui est dérivable n'est pas stocké : les PV maximaux et la durée du chrono viennent des constantes.
+ */
+export interface EtatBossFinal {
+  readonly pvCourants: number
+  /** EXG-16 — temps restant du combat final, en ms ; part de `fin.timerBossFinalS`. */
+  readonly timerRestantMs: number
+}
+
+/**
+ * EXG-28 — statistiques de l'écran de fin, **figées** à la victoire. Elles ne se recalculent pas après
+ * coup : le temps de jeu continue d'avancer une fois la partie terminée, une lecture tardive mentirait.
+ * Les trois premières sont littéralement exigées par le critère d'acceptation d'EXG-28.
+ */
+export interface StatistiquesFin {
+  /** Temps de jeu simulé au moment de la victoire (hors-ligne exclu, comme partout ailleurs). */
+  readonly dureeTotaleMs: number
+  /** Zone la plus profonde atteinte par la **progression** ; jamais la zone dédiée du boss final. */
+  readonly zoneMaxAtteinte: number
+  readonly ascensions: number
+  readonly prestigesTotal: number
+}
+
 /** EXG-4 / EXG-53 — résumé d'une absence, à afficher en encart non bloquant. Les 3 valeurs exigées. */
 export interface ResumeHorsLigne {
   /** Or crédité par la production passive des écoles pendant l'absence (EXG-5). */
@@ -292,6 +319,14 @@ export interface EtatJeu {
   readonly ascension: EtatAscension
   /** EXG-28 / EXG-44 — partie terminée : plus aucun prestige ni Ascension possible. */
   readonly partieTerminee: boolean
+  /**
+   * EXG-28 — combat du boss final en cours. **Facultatif** : absent tant que la zone dédiée n'a pas été
+   * ouverte, et absent de toutes les sauvegardes écrites avant T-13. C'est ce qui permet de relire un
+   * ancien format sans migration ni perte : le champ n'est pas inventé au chargement, il reste absent.
+   */
+  readonly bossFinal?: EtatBossFinal
+  /** EXG-28 — écran de fin figé à la victoire ; absent tant que le boss final n'est pas tombé. */
+  readonly statistiquesFin?: StatistiquesFin
 
   // ── horloge (EXG-1 à 3, EXG-49) ────────────────────────────────────────────────────────────────
   /** Temps de jeu simulé, en ms : avance de `PAS_TICK_MS` par tick (EXG-1). Le hors-ligne ne l'incrémente pas. */
@@ -423,6 +458,50 @@ export interface ResultatReinitialisation {
   readonly motifRefus: MotifRefus | null
   /** Monnaie de méta créditée : Éclats au prestige (EXG-18), Points à l'Ascension (§8). */
   readonly gain: number
+}
+
+/**
+ * EXG-28 — prévisualisation **en lecture seule** de la zone dédiée du boss final : où en est le joueur
+ * du seuil d'Ascensions, et ce qui l'attend s'il entre. Même discipline que les deux autres aperçus
+ * (EXG-21) : aucune fonction produisant cette valeur ne construit ni ne retourne d'état.
+ */
+export interface ApercuFin {
+  readonly accessible: boolean
+  readonly motifIndisponible: MotifRefus | null
+  readonly ascensionsEffectuees: number
+  /** §8 / EXG-28 — `nAscensionsRequises`, seuil d'ouverture de la zone dédiée. */
+  readonly ascensionsRequises: number
+  /** EXG-28 — `pvBoss(profondeur_équivalente) × mult_pv`, jamais `pvBoss(zoneBossFinal)`. */
+  readonly pvBossFinal: number
+  /** EXG-16 / EXG-28 — durée du chrono du combat final, en ms. */
+  readonly timerMs: number
+  /** Vrai si un combat final est déjà en cours (entrer une seconde fois ne le relancerait pas). */
+  readonly engage: boolean
+}
+
+/** EXG-28 — verdict d'une entrée dans la zone dédiée ; un refus rend l'état d'entrée **par référence**. */
+export interface ResultatEntreeFinale {
+  readonly etat: EtatJeu
+  readonly accepte: boolean
+  readonly motifRefus: MotifRefus | null
+}
+
+/**
+ * EXG-16 / EXG-28 / EXG-44 — résultat d'un pas de combat du boss final. Même forme d'esprit
+ * qu'`AvancementCombat`, mais sur l'état complet : la victoire ne touche pas qu'au combat, elle termine
+ * la partie et fige l'écran de fin.
+ */
+export interface AvancementBossFinal {
+  readonly etat: EtatJeu
+  /** Faux si aucun combat final n'était engagé : le pas n'a alors rien fait du tout. */
+  readonly engage: boolean
+  readonly bossVaincu: boolean
+  /** EXG-16 — le chrono a expiré avant la mort du boss ; le combat se referme sans rien coûter. */
+  readonly bossEchoue: boolean
+  readonly pvRestants: number
+  readonly timerRestantMs: number
+  /** EXG-30 — étapes de résolution consommées : constant, indépendant du budget de dégâts. */
+  readonly iterations: number
 }
 
 /** §4.7 — enveloppe persistée : état sérialisé + version de schéma (EXG-24, EXG-25, EXG-26). */
@@ -597,8 +676,18 @@ export interface ParametresAchatMultiplicatif {
 export interface ConstantesFin {
   /** §8 — 3 à 5 Ascensions, sous la contrainte dure `20 ≤ N × prestigesParAscension ≤ 30`. */
   readonly nAscensionsRequises: number
-  /** EXG-28 — numéro de la zone dédiée qui héberge le boss final. */
+  /**
+   * EXG-28 — **nom** de la zone dédiée qui héberge le boss final, jamais une profondeur de progression.
+   * Le boss final ne vit pas sur l'échelle normale des zones : s'il y vivait, le joueur le croiserait
+   * pendant un run ordinaire. Ses PV ne s'en déduisent donc pas (voir les deux champs suivants).
+   */
   readonly zoneBossFinal: number
+  /** EXG-28 — profondeur **équivalente** dont les PV du boss final sont dérivés (`pvBoss(z)`). */
+  readonly pvProfondeurEquivalente: number
+  /** EXG-28 — facteur appliqué à `pvBoss(pvProfondeurEquivalente)` pour obtenir les PV du boss final. */
+  readonly pvMultiplicateur: number
+  /** EXG-16 / EXG-28 — durée du combat du boss final, en secondes ; distincte de `zones.timerBossS`. */
+  readonly timerBossFinalS: number
 }
 
 /**

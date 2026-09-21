@@ -9,33 +9,10 @@
 //   · régénération de forme depuis « vecteur archivé 2026-09-21 » — valeurs inchangées, aucune recherche relancée
 //   · contraintes §8 : 13/13 tenues
 
-import type { Constantes, ConstantesFin } from '../domain/types.ts'
-
-/**
- * EXG-28 — le bloc `fin` livré : le contrat actuel de `ConstantesFin` (`nAscensionsRequises`,
- * `zoneBossFinal`) **plus** les trois nombres qui décrivent le boss de la zone dédiée.
- *
- * Ils sont dans `fin` et non à côté parce que le moteur reçoit ses valeurs d'équilibrage en **un
- * seul** objet `Constantes` : les sortir obligerait à les lui passer en deux morceaux, ou à
- * recomposer l'objet à la main dans cette couche.
- *
- * `zoneBossFinal` est l'**identifiant** de la zone dédiée, pas une profondeur de progression : le
- * boss final ne vit pas sur l'échelle normale des zones. Ses PV se calculent par
- * `pvBoss(pvProfondeurEquivalente) × pvMultiplicateur`, et son chrono est `timerBossFinalS`, distinct
- * de `zones.timerBossS`.
- *
- * **T-13** déplace ces trois champs dans `ConstantesFin` (`src/domain/types.ts`), câble l'accès à la
- * zone dédiée (`ascensions ≥ nAscensionsRequises`) et le calcul des PV ; ce type local disparaît
- * alors, et `CONSTANTES` se réannote simplement `Constantes`.
- */
-export interface ConstantesFinLivree extends ConstantesFin {
-  readonly pvProfondeurEquivalente: number
-  readonly pvMultiplicateur: number
-  readonly timerBossFinalS: number
-}
+import type { Constantes } from '../domain/types.ts'
 
 /** §8 — l'ensemble des valeurs d'équilibrage passées au moteur pur. */
-export const CONSTANTES: Omit<Constantes, 'fin'> & { readonly fin: ConstantesFinLivree } = {
+export const CONSTANTES: Constantes = {
   tick: {
     nTicksMax: 600,
   },

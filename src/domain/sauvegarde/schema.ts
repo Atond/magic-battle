@@ -23,12 +23,13 @@
 
 import { PAS_TICK_MS, VAGUE_DEPART, VERSION_SCHEMA, ZONE_DEPART } from '../constantes-moteur.ts'
 import { noeudsDeLArbre } from '../prestige/arbre.ts'
-import { nbVagues, timerBossMs } from '../zones/formules.ts'
+import { nbVagues, pvBossFinal, timerBossFinalMs, timerBossMs } from '../zones/formules.ts'
 import type {
   Boss,
   Bourse,
   Constantes,
   EtatAscension,
+  EtatBossFinal,
   EtatCombat,
   EtatEcole,
   EtatJeu,
@@ -41,6 +42,7 @@ import type {
   ParametresSort,
   PhaseCombat,
   Sauvegarde,
+  StatistiquesFin,
 } from '../types.ts'
 
 /* ═══════════════════════════════════════════════════════════ motifs de refus (exploitables par l'UI) */
@@ -150,6 +152,7 @@ type Forme =
   | { readonly genre: 'dictionnaire'; readonly entrees: readonly (readonly [string, Schema<unknown>])[] }
   | { readonly genre: 'liste'; readonly element: Schema<unknown>; readonly longueurMax: number }
   | { readonly genre: 'nullable'; readonly interne: Schema<unknown> }
+  | { readonly genre: 'facultatif'; readonly interne: Schema<unknown> }
   | { readonly genre: 'ou'; readonly options: readonly Schema<unknown>[] }
 
 /**
@@ -218,6 +221,22 @@ export function liste<E>(element: Schema<E>, longueurMax: number): Schema<readon
 /** Champ qui accepte `null` en plus de sa forme interne (`cible`, `timerBossRestantMs`). */
 export function nullable<T>(interne: Schema<T>): Schema<T | null> {
   return { forme: { genre: 'nullable', interne } }
+}
+
+/**
+ * Champ **facultatif** : absent de la charge, il reste absent de l'état reconstruit — il n'est ni
+ * inventé, ni comblé par un `null` qui ressemblerait à une valeur. Présent, il est validé comme
+ * n'importe quel autre champ, bornes comprises.
+ *
+ * Pourquoi cette forme existe (T-13) : `bossFinal` et `statistiquesFin` sont apparus après la version 1
+ * du format. Les déclarer obligatoires rejetterait toutes les sauvegardes écrites avant — c'est-à-dire
+ * toutes celles qui existent — pour un champ qui n'a de sens que dans la toute fin de partie. Et
+ * « absent » est ici une information exacte : cette partie n'a jamais ouvert la zone dédiée.
+ * Le jour où un champ facultatif doit acquérir une valeur par défaut calculée, c'est une **migration**
+ * (EXG-26) qu'il faut écrire, pas une valeur inventée dans le validateur.
+ */
+export function facultatif<T>(interne: Schema<T>): Schema<T | undefined> {
+  return { forme: { genre: 'facultatif', interne } }
 }
 
 /**
@@ -373,6 +392,11 @@ function validerForme(
       // `null` est une valeur déclarée du champ, pas une absence : elle ne descend pas d'un niveau.
       return brut === null ? { ok: true, valeur: null } : validerForme(brut, forme.interne, chemin, profondeur)
 
+    case 'facultatif':
+      // L'absence est traitée par `validerObjet`, qui seul sait si la clé était là. Ici, la valeur est
+      // présente : elle doit donc être valide, un champ facultatif n'est pas un champ laxiste.
+      return validerForme(brut, forme.interne, chemin, profondeur)
+
     case 'ou': {
       let dernier: Verdict<unknown> = refusImport('typeIncorrect', chemin, `Champ « ${chemin} » : forme inconnue.`)
       for (const option of forme.options) {
@@ -431,6 +455,8 @@ function validerObjet(
     const cheminChamp = `${chemin}.${cle}`
     const lue = proprietePropre(brut, cle)
     if (!lue.presente) {
+      // Un champ facultatif absent le reste : aucune clé n'est écrite, aucune valeur n'est inventée.
+      if (sous.forme.genre === 'facultatif') continue
       return refusImport('champManquant', cheminChamp, `Champ « ${cheminChamp} » absent de la sauvegarde.`)
     }
     const verdict = validerForme(lue.valeur, sous, cheminChamp, profondeur + 1)
@@ -607,6 +633,26 @@ export function construireSchemaEtat(constantes: Constantes): Schema<EtatJeu> {
       sixiemeEcoleDebloquee: booleen(),
     }),
     partieTerminee: booleen(),
+    // EXG-28 — combat du boss final en cours. Bornes tirées des constantes de fin, pas de celles des
+    // boss de zone : le boss final a ses propres PV et son propre chrono. Le schéma dit « dans les
+    // bornes » ; l'invariant croisé « ce combat n'existe qu'au seuil d'Ascensions » se répare dans
+    // `normalisation.ts`, il ne se rejette pas.
+    bossFinal: facultatif(
+      objet<EtatBossFinal>({
+        pvCourants: nombre(0, Math.max(pvBossFinal(constantes), 0)),
+        timerRestantMs: nombre(0, Math.max(timerBossFinalMs(constantes), 0)),
+      }),
+    ),
+    // EXG-28 — écran de fin figé. `zoneMaxAtteinte` est une zone de progression : elle est bornée par
+    // le type, comme les autres numéros de zone, jamais par le numéro de la zone dédiée.
+    statistiquesFin: facultatif(
+      objet<StatistiquesFin>({
+        dureeTotaleMs: quantite(),
+        zoneMaxAtteinte: entier(ZONE_DEPART, COMPTEUR_MAX),
+        ascensions: compteur(),
+        prestigesTotal: compteur(),
+      }),
+    ),
     tempsJeuMs: quantite(),
     ticksEcoules: compteur(),
     ticksRattrapes: compteur(),

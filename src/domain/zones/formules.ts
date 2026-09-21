@@ -107,15 +107,62 @@ export function timerBossMs(constantes: Constantes): number {
   return constantes.zones.timerBossS * MS_PAR_SECONDE
 }
 
+/* ──────────────────────────────────────────────────────── boss final, zone dédiée (EXG-28) */
+
+/**
+ * EXG-28 — PV du boss final : `pvBoss(profondeur_équivalente) × mult_pv`. Ils ne se déduisent **pas**
+ * de `fin.zoneBossFinal`, qui est le *nom* de la zone dédiée et non une profondeur : le boss final ne
+ * vit pas sur l'échelle des zones, sinon on le croiserait pendant un run ordinaire (ADR-17, révision
+ * du 2026-09-21). La formule de zone, elle, n'est pas dupliquée : on appelle `pvBoss`.
+ */
+export function pvBossFinal(constantes: Constantes): number {
+  return pvBoss(constantes.fin.pvProfondeurEquivalente, constantes) * constantes.fin.pvMultiplicateur
+}
+
+/** EXG-16 / EXG-28 — durée du combat du boss final, en ms. Son chrono lui appartient. */
+export function timerBossFinalMs(constantes: Constantes): number {
+  return constantes.fin.timerBossFinalS * MS_PAR_SECONDE
+}
+
+/**
+ * EXG-28 — le boss de la zone dédiée. `orAuMeurtre` vaut zéro, et ce n'est pas un oubli : la partie
+ * s'arrête sur sa mort (EXG-44), et la zone dédiée n'ayant pas de place sur l'échelle des zones, son
+ * `mult_or_zone` n'aurait aucun sens (il serait non fini). Le texte du boss est du contenu (vague 3).
+ */
+export function creerBossFinal(constantes: Constantes): Boss {
+  const pvMax = pvBossFinal(constantes)
+  return {
+    nom: '',
+    pvMax,
+    pvCourants: pvMax,
+    orAuMeurtre: 0,
+    zone: constantes.fin.zoneBossFinal,
+    estBoss: true,
+    estFinal: true,
+  }
+}
+
 /** §5 — monstre de la vague `vague` de la zone `zone`. `nom` reste vide : le texte est du contenu (T-25). */
 export function creerMonstre(zone: number, vague: number, constantes: Constantes): Monstre {
   const pvMax = pvVague(zone, vague, constantes)
   return { nom: '', pvMax, pvCourants: pvMax, orAuMeurtre: orMonstre(pvMax, zone, constantes) }
 }
 
-/** §5 / EXG-28 — boss de la zone `zone` ; `estFinal` marque le boss de la zone dédiée de fin (lot D). */
+/**
+ * §5 / EXG-28 — boss de la zone `zone`.
+ *
+ * Le seul cas particulier est la zone dédiée (`fin.zoneBossFinal`) : ses PV suivent `pvBossFinal`, pas
+ * `pvBoss(zone)`. Une comparaison d'entiers, celle-là même qui décidait déjà d'`estFinal` — le coût du
+ * chemin chaud ne bouge pas (EXG-30), et la formule de zone n'est écrite qu'une fois.
+ *
+ * Que la progression n'y mène jamais ne tient pas à cette fonction : le combat final vit hors
+ * d'`EtatCombat` (`EtatJeu.bossFinal`) et ne s'ouvre que par `fin/entrerZoneFinale`, sous le seuil
+ * d'Ascensions d'EXG-28. Si un run ordinaire atteignait malgré tout ce numéro de zone — 999 zones
+ * au-delà de tout ce que le simulateur mesure — il y trouverait ce même boss, pas un sosie.
+ */
 export function creerBoss(zone: number, constantes: Constantes): Boss {
   const numero = zoneSaine(zone)
+  if (numero === constantes.fin.zoneBossFinal) return creerBossFinal(constantes)
   const pvMax = pvBoss(numero, constantes)
   return {
     nom: '',
@@ -124,6 +171,7 @@ export function creerBoss(zone: number, constantes: Constantes): Boss {
     orAuMeurtre: orMonstre(pvMax, numero, constantes),
     zone: numero,
     estBoss: true,
-    estFinal: numero === constantes.fin.zoneBossFinal,
+    // Le cas `estFinal` a déjà été rendu ci-dessus : ici, c'est forcément un boss de progression.
+    estFinal: false,
   }
 }

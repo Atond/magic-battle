@@ -17,7 +17,7 @@ import { VERSION_SCHEMA, ZONE_DEPART } from '../constantes-moteur.ts'
 import { synchroniserAutoCast } from '../prestige/arbre.ts'
 import { etatSortLu } from '../sorts/index.ts'
 import type { Boss, Constantes, EtatCombat, EtatEcole, EtatJeu, EtatSort, IdEcole, Monstre } from '../types.ts'
-import { nbVagues, timerBossMs, vagueSaine } from '../zones/formules.ts'
+import { nbVagues, pvBossFinal, timerBossFinalMs, timerBossMs, vagueSaine } from '../zones/formules.ts'
 
 /** Les PV courants d'une cible ne dépassent pas ses PV maximaux et ne descendent pas sous zéro. */
 function cibleSaine(cible: Monstre | Boss | null): Monstre | Boss | null {
@@ -105,6 +105,44 @@ function normaliserSorts(etat: EtatJeu, constantes: Constantes): EtatJeu {
   return modifie ? { ...etat, sorts } : etat
 }
 
+/**
+ * EXG-28 / EXG-44 — cohérence de la fin de partie, la seule qui se répare **en retirant** plutôt qu'en
+ * redérivant. Trois relations que le schéma ne sait pas exprimer :
+ *
+ *  1. `partieTerminee` ne s'obtient qu'en battant le boss final, donc au seuil d'Ascensions d'EXG-28.
+ *     Une sauvegarde qui l'affirme sans les Ascensions ment : on la répare en rendant la partie au
+ *     joueur (prestige et Ascension redeviennent possibles), jamais en lui offrant des Ascensions ;
+ *  2. l'écran de fin n'existe que pour une partie terminée — sinon il n'est qu'un décor ;
+ *  3. un combat final en cours suppose la zone dédiée ouverte et la partie non terminée ; ses PV et son
+ *     chrono restent dans leurs bornes de constantes.
+ *
+ * Rien n'est rejeté (règle du fichier) et rien n'est inventé : les trois cas ne font que refermer.
+ */
+function normaliserFin(etat: EtatJeu, constantes: Constantes): EtatJeu {
+  const seuil = constantes.fin.nAscensionsRequises
+  const seuilAtteint =
+    Number.isFinite(seuil) && seuil >= 0 && etat.ascension.ascensionsEffectuees >= seuil
+  const partieTerminee = etat.partieTerminee && seuilAtteint
+
+  const combat =
+    !partieTerminee && seuilAtteint && etat.bossFinal !== undefined
+      ? {
+          pvCourants: Math.min(Math.max(etat.bossFinal.pvCourants, 0), pvBossFinal(constantes)),
+          timerRestantMs: Math.min(Math.max(etat.bossFinal.timerRestantMs, 0), timerBossFinalMs(constantes)),
+        }
+      : undefined
+
+  const { bossFinal: _combatLu, statistiquesFin: _statistiquesLues, ...reste } = etat
+  const fin: EtatJeu = { ...reste, partieTerminee }
+  return {
+    ...fin,
+    ...(combat === undefined ? {} : { bossFinal: combat }),
+    ...(partieTerminee && etat.statistiquesFin !== undefined
+      ? { statistiquesFin: etat.statistiquesFin }
+      : {}),
+  }
+}
+
 /** EXG-54 — une quête est créditée une seule fois : la liste ne porte jamais deux fois le même identifiant. */
 function dedoublonner(ids: readonly string[]): readonly string[] {
   const vus = new Set<string>()
@@ -127,7 +165,7 @@ export function normaliserEtat(etat: EtatJeu, constantes: Constantes): EtatJeu {
   const zoneMaxDuRun = Math.max(etat.prestige.zoneMaxDuRun, etat.combat.zone, ZONE_DEPART)
 
   const base: EtatJeu = {
-    ...etat,
+    ...normaliserFin(etat, constantes),
     version: VERSION_SCHEMA,
     bourse: {
       ...etat.bourse,

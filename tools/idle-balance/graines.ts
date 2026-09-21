@@ -234,5 +234,11 @@ export const GRAINES: Constantes = {
     nAscensionsRequises: 4,
     // Zone dédiée du boss final (EXG-28), atteinte au dernier cycle d'Ascension.
     zoneBossFinal: 50,
+    // T-13 a déplacé les trois nombres du boss final dans `ConstantesFin` (ils vivaient jusque-là dans
+    // `ConstantesFinLivree`). Les valeurs d'amorçage sont celles de `PARAMETRES_DEPART` : comme tout ce
+    // fichier, elles ne sont **pas** contractuelles — les valeurs livrées sont dans `src/donnees/`.
+    pvProfondeurEquivalente: 120,
+    pvMultiplicateur: 1,
+    timerBossFinalS: 60,
   },
 }
