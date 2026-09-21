@@ -10,6 +10,8 @@
     "typecheck": "tsc -b --noEmit",
     "lint": "oxlint",
     "test": "vitest run",
+    "equilibrage:check": "tsx tools/idle-balance/check.ts",
+    "equilibrage:search": "tsx tools/idle-balance/search.ts",
     "verify": "bash scripts/verify.sh"
   },
   "dependencies": {
