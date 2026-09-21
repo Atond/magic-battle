@@ -1,12 +1,23 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 4 — 2026-09-21 —
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 5 — 2026-09-21 —
 > corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
-> `challenge-v2.md`) ; la v4 n'ajoute qu'ADR-16, tranché en cours de vague 1 et validé le 2026-09-21.
+> `challenge-v2.md`) ; v4 ajoute ADR-16, v5 ajoute ADR-17 et ferme la dernière question ouverte de §14.
+> Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21.
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v4 (2026-09-21)
+Deux ajouts, tous deux issus du rapport `tools/idle-balance/rapports/2026-09-21.md` (T-14) :
+- **ADR-17** (§15) : la durée réelle d'un run est exigée **stable ou croissante à 10 % près** et non plus croissante — la
+  croissance s'est révélée mathématiquement incompatible avec le reste du design, démonstration à l'appui.
+  §8 est amendé en conséquence (une puce).
+- **Question ouverte §14 fermée** : le seuil de mur qui fait échouer `verify.sh` porte sur le **blocage de
+  progression** (aucune zone gagnée), à 90 min ; le mur au sens « aucun achat abordable » ne dépasse jamais
+  0,5 min et ne mesure rien. §14 passe la ligne à « résolu ».
+Aucune exigence EXG modifiée, aucune formule touchée, aucun renumérotage.
 
 ## Changements depuis v3 (2026-09-21)
 Un seul ajout, issu de l'implémentation de la vague 1 : **ADR-16** (§15) tranche ce que la spec laissait
@@ -374,10 +385,13 @@ sont pas fixés a priori : ce sont des **sorties** du simulateur, contraintes pa
   run (entre deux prestiges consécutifs) atteint une zone strictement plus profonde que le run précédent.
   `[tranché en interview, complément challenge v2]`
 - Rejouer le contenu déjà vu du run précédent est **2-3× plus rapide** ; le contenu neuf allonge la durée
-  réelle du run. Durée réelle d'un run **croissante** d'un run à l'autre, plancher **2 h**, plafond **24 h**.
-  `[tranché en interview, complément challenge v2]`
+  réelle du run. Durée réelle d'un run **stable ou croissante à 10 % près** — aucun run ne dure moins de
+  90 % du précédent —, plancher **2 h**, plafond **24 h**.
+  `[tranché en interview, complément challenge v2] [amendé par ADR-17 — « croissante » était inatteignable]`
 - 1er sort actif ~5 min, 1er mur ~1 h, **1er prestige en 2-3 h**.
-- **Aucun mur > 90 min** avant le 1er prestige `[seuil exact à confirmer par simulation]`.
+- **Aucun blocage de progression > 90 min** avant le 1er prestige — « blocage » = intervalle sans aucune
+  zone gagnée. Le mur au sens littéral « aucun achat abordable » est mesuré séparément, à titre de garde
+  secondaire (15 min), car il ne dépasse jamais 0,5 min en pratique. `[seuil confirmé par T-14, ADR-17]`
 - Contrainte dure : **20 ≤ prestiges_total ≤ 30**, répartis en une fourchette **3-5 Ascensions** ×
   **5-8 prestiges** par Ascension (`N_ASCENSIONS_REQUISES` × `PRESTIGES_PAR_ASCENSION`) ; le simulateur
   choisit un couple compatible avec la borne dure. `[complété par le challenger v2]`
@@ -553,7 +567,7 @@ arbitrages stratégiques restant à trancher.
 | Noms définitifs des écoles/sorts/zones/boss/équipements | Le tableau §8 et le code utilisent des noms de travail (Feu, Glace…) | Rédaction du guide de ton et du contenu en vague 3 | Vague 3 |
 | Palette de contraste exacte (couleurs sombres + fantasy) | EXG-31 fixe le ratio, pas les couleurs | Choix de palette en vague 2, vérifiée par audit outillé | Vague 2 |
 | Store React définitif (Zustand ou équivalent) | ADR-6 propose Zustand sans l'avoir comparé à une alternative concrète en conditions réelles de tick 100 ms | Décision technique à la mise en œuvre de `state/`, documentée en ADR si un autre choix s'impose | Vague 2 |
-| Seuil exact de mur (minutes) pour faire échouer `verify.sh` | §8 propose 90 min sans confirmation interview | À fixer avec les premiers résultats du simulateur | Vague 1 (T-14) |
+| ~~Seuil exact de mur (minutes) pour faire échouer `verify.sh`~~ **résolu** | — | 90 min sur le **blocage de progression** (aucune zone gagnée) ; le mur « aucun achat abordable » ne dépasse jamais 0,5 min et n'est pas la métrique utile. Rapport T-14 du 2026-09-21 | Tranché, vague 1 (T-14) |
 
 ## 15. Décisions (ADR)
 - **ADR-1** (2026-09-20) — Sauvegarde locale uniquement, pas de cloud. Raison : simplicité, cohérence avec
@@ -637,6 +651,27 @@ arbitrages stratégiques restant à trancher.
   tout futur guichet : **un achat se réinitialise avec la monnaie qui l'a payé**. Écarté : tout remettre à
   zéro (perte sèche de Renommée non regagnable, contredit EXG-54) ; tout conserver (le prestige ne
   réinitialise plus rien de la chaîne de DPS, contredit l'intention d'ADR-2 et d'ADR-8).
+- **ADR-17** (2026-09-21) — La durée réelle d'un run est exigée **stable ou croissante à 10 % près**
+  (aucun run ne dure moins de 90 % du précédent ; plancher 2 h, plafond 24 h) au lieu de **croissante**.
+  La tolérance est explicite plutôt qu'implicite : « non décroissante » au sens strict serait à son tour
+  inatteignable, la durée oscillant de quelques pour cent d'un run au suivant selon l'ordre des achats. Raison : le simulateur
+  (T-14) démontre que la croissance est un point fixe du design, pas un réglage. La durée d'un run vaut
+  `D = patience × g/(g−1)`, où `g` est le facteur de croissance du temps par zone ; les multiplicateurs de
+  méta-progression déplacent la **zone atteinte**, pas la durée, donc `D` ne dépend pas du numéro de run.
+  Mesure : 2,38 h → 2,88 h sur 28 runs, pente ×0,9991 ; 18 designs alternatifs rejoués par le script
+  donnent des pentes de ×0,985 à ×1,007. La seule politique qui fait croître les durées (prestiger au
+  doublement du stock d'Éclats) les projette à 260-270 h par run, hors du plafond de 24 h, et réduit la
+  partie à 2-5 runs. L'**objectif** de la contrainte est néanmoins atteint avec une large marge : elle
+  avait été écrite pour garantir ≥ 40 h sans mur ni répétition ennuyeuse (trou bloquant #1 du challenge
+  v2), et la mesure donne **72,28 h**. Écarté : ajouter au moteur une source de croissance progressive
+  (paliers d'école à seuils illimités) — coût réel (types, schéma de sauvegarde, recherche complète à
+  refaire) pour satisfaire la lettre d'un mécanisme dont l'objectif est déjà dépassé, avec un risque de
+  débordement mesuré sur ce terrain précis (porter le nombre de pistes d'amélioration de 2 à 3 projette la
+  valeur maximale à 1,6e308, contre 5,22e173 aujourd'hui). Écarté aussi : assouplir en silence dans le
+  simulateur — la dérogation est archivée dans `src/donnees/` sous `CONTRAINTES_NON_TENUES`, avec garde
+  anti-péremption (un rouge non listé échoue, un vert encore listé échoue également). Rallonger le jeu plus
+  tard ne demande pas de code : adoucir `g` (de 1,21 à 1,10 double presque `D`), monter le couple vers
+  5 × 6 = 30, ou étaler le contenu par zone — trois leviers d'une seule passe `equilibrage:search`.
 
 ## 16. Livraison par vagues
 
