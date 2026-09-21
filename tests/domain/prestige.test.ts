@@ -2,8 +2,8 @@
 // confirmation à deux étapes (EXG-21), bonus passif (EXG-38) et arbre d'Éclats (EXG-39, ADR-8).
 //
 // Aucune valeur d'équilibrage ici : `k`, `α`, `B`, `β`, l'échelle de coût des nœuds et le catalogue
-// lui-même viennent de `graines.ts`. Les seules constantes littérales des tests sont des rangs, des
-// quantités et des bornes de spec (8-12 nœuds, zone 1).
+// lui-même viennent de `src/donnees/constantes.ts`. Les seules constantes littérales des tests sont des
+// rangs, des quantités et des bornes de spec (8-12 nœuds, zone 1).
 
 import { describe, expect, it } from 'vitest'
 
@@ -35,9 +35,9 @@ import type {
   IdEcole,
   ParametresNoeudArbre,
 } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 const P = C.prestige
 
@@ -93,11 +93,27 @@ describe('EXG-18 — `Éclats = floor(k × zone_max^α)`', () => {
     expect(eclatsAuPrestige(20, C)).toBeLessThan(eclatsAuPrestige(40, C))
   })
 
-  it('rend un résultat sensé pour une zone maximale de 1 : un entier positif, jamais 0 ni NaN', () => {
+  // Un prestige à la zone de départ rapporte **0** Éclat avec les constantes réelles (k = 0,3, α = 1 :
+  // il faut la zone 4 pour en gagner un). Ce n'est pas un défaut : EXG-18 exige la formule et la
+  // croissance stricte, pas un plancher à 1, et le 1er prestige réel survient bien plus profond (2,77 h
+  // de jeu mesurées par le rapport `tools/idle-balance/rapports/2026-09-21.md`). Ce que le test doit
+  // donc verrouiller, c'est qu'un gain nul reste un **entier fini non négatif** et n'empoisonne rien en
+  // aval — un `-0`, un `NaN` ou un flottant casserait le solde d'Éclats et le bonus passif d'EXG-38.
+  // Conséquence produit pour T-23 : la confirmation à deux étapes doit afficher le gain, y compris nul,
+  // pour qu'un joueur ne réinitialise jamais son run sans rien recevoir en échange.
+  it('rend un entier fini non négatif à la zone de départ, gain nul compris', () => {
     const gain = eclatsAuPrestige(ZONE_DEPART, C)
     expect(gain).toBe(Math.floor(P.k * ZONE_DEPART ** P.alpha))
     expect(Number.isInteger(gain)).toBe(true)
-    expect(gain).toBeGreaterThanOrEqual(1)
+    expect(Number.isFinite(gain)).toBe(true)
+    expect(gain).toBeGreaterThanOrEqual(0)
+    expect(Object.is(gain, -0)).toBe(false)
+  })
+
+  it('franchit le seuil de 1 Éclat à la profondeur prévue par les constantes réelles', () => {
+    const zoneSeuil = Math.ceil((1 / P.k) ** (1 / P.alpha))
+    expect(eclatsAuPrestige(zoneSeuil, C)).toBeGreaterThanOrEqual(1)
+    expect(eclatsAuPrestige(zoneSeuil - 1, C)).toBe(0)
   })
 
   it('refuse les entrées absurdes sans propager de NaN', () => {

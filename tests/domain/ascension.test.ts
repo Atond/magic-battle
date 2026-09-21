@@ -3,8 +3,8 @@
 // déblocage de la 6e école (EXG-41).
 //
 // Aucune valeur d'équilibrage ici : `k_ascension`, `prestigesParAscension`, l'échelle de coût des nœuds
-// et le catalogue viennent de `graines.ts`. Les seules constantes littérales sont des rangs, des
-// quantités et les bornes de spec (6-10 nœuds).
+// et le catalogue viennent de `src/donnees/constantes.ts`. Les seules constantes littérales sont des
+// rangs, des quantités et les bornes de spec (6-10 nœuds).
 
 import { describe, expect, it } from 'vitest'
 
@@ -38,9 +38,9 @@ import type {
   ParametresNoeudArbre,
   ParametresSort,
 } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 const A = C.ascension
 

@@ -1,6 +1,6 @@
 // Miroir de `src/domain/zones/` — T-5, EXG-6 et EXG-15 à EXG-17 (vagues, boss chronométré, or), plus le
 // budget de calcul d'EXG-30 (nettoyage de vagues en forme fermée).
-// Aucune valeur d'équilibrage ici : tout vient de `tools/idle-balance/graines.ts`. ADR-13 : aucune liste
+// Aucune valeur d'équilibrage ici : tout vient de `src/donnees/constantes.ts`. ADR-13 : aucune liste
 // de zones n'existe, ni dans le domaine ni dans ce test — tout passe par la formule paramétrique.
 
 import { describe, expect, it } from 'vitest'
@@ -22,9 +22,9 @@ import {
   vaguesNettoyees,
 } from '../../src/domain/zones/index.ts'
 import type { Boss, Constantes, EtatCombat, EtatJeu, IdEcole } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const Z = C.zones
 const HORODATAGE = 1_700_000_000_000
 

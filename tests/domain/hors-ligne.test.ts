@@ -1,14 +1,14 @@
 // Miroir de `src/domain/moteur.ts` — production hors-ligne (EXG-4, EXG-5, EXG-49).
-// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `tools/idle-balance/graines.ts`.
+// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `src/donnees/constantes.ts`.
 
 import { describe, expect, it } from 'vitest'
 
 import { MS_PAR_HEURE, MS_PAR_SECONDE } from '../../src/domain/constantes-moteur.ts'
 import { calculHorsLigne, degatsParSeconde, etatInitial } from '../../src/domain/moteur.ts'
 import type { EtatJeu, IdEcole } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const T0 = 1_700_000_000_000
 const PLAFOND_MS = C.horsLigne.plafondHeures * MS_PAR_HEURE
 

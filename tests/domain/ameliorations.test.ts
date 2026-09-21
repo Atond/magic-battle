@@ -1,6 +1,6 @@
 // Miroir de `src/domain/ameliorations/` — T-8, EXG-42 (multiplicateur de dégâts acheté en or) et EXG-10
 // (l'or et la Renommée ne se substituent jamais l'un à l'autre).
-// Aucune valeur d'équilibrage ici : coûts, croissances et effets viennent de `graines.ts`.
+// Aucune valeur d'équilibrage ici : coûts, croissances et effets viennent de `src/donnees/constantes.ts`.
 
 import { describe, expect, it } from 'vitest'
 
@@ -13,9 +13,9 @@ import {
 } from '../../src/domain/ameliorations/index.ts'
 import { degatsParSeconde, etatInitial } from '../../src/domain/moteur.ts'
 import type { EtatJeu, IdEcole, ParametresAchatMultiplicatif } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 const PREMIERE: ParametresAchatMultiplicatif = C.ameliorations[0]
 const EQUIPEMENT: ParametresAchatMultiplicatif = C.equipement[0]

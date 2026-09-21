@@ -1,5 +1,5 @@
 // Miroir de `src/domain/ecoles/` — T-3, EXG-6 à EXG-9 (coûts, production, paliers, déblocage).
-// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `tools/idle-balance/graines.ts`.
+// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `src/donnees/constantes.ts`.
 // Les seuls nombres littéraux présents sont des quantités de test (rangs, quantités achetées) et des
 // tolérances, jamais des valeurs de jeu.
 
@@ -17,9 +17,9 @@ import {
 } from '../../src/domain/ecoles/index.ts'
 import { degatsParSeconde, etatInitial } from '../../src/domain/moteur.ts'
 import type { Constantes, EtatJeu, IdEcole, ParametresEcole } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 const FEU = C.ecoles.feu
 

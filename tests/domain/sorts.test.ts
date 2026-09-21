@@ -15,9 +15,9 @@ import {
   sortDisponible,
 } from '../../src/domain/sorts/index.ts'
 import type { EtatJeu, IdEcole, ParametresSort } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 
 /** Premier sort du contrat : celui de l'école de départ, disponible dès la 1re seconde de jeu. */

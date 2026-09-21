@@ -20,9 +20,9 @@ import { etatInitial } from '../../src/domain/moteur.ts'
 import { deserialiser, lireVersion, MIGRATIONS, migrer } from '../../src/domain/sauvegarde/index.ts'
 import type { Migration } from '../../src/domain/sauvegarde/index.ts'
 import type { Constantes, Sauvegarde } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C: Constantes = GRAINES
+const C: Constantes = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 
 function fixture(nom: string): unknown {

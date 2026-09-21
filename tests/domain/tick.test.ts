@@ -1,14 +1,14 @@
 // Miroir de `src/domain/moteur.ts` — boucle de simulation (EXG-1, EXG-2, EXG-3, EXG-30).
-// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `tools/idle-balance/graines.ts`.
+// Aucune valeur d'équilibrage n'est écrite ici : tout vient de `src/donnees/constantes.ts`.
 
 import { describe, expect, it } from 'vitest'
 
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { PAS_TICK_MS } from '../../src/domain/constantes-moteur.ts'
 import { appliquerDelta, degatsParSeconde, etatInitial, tick } from '../../src/domain/moteur.ts'
 import type { Constantes, EtatJeu, IdEcole } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 
 /** État de départ productif : quelques niveaux d'école, sinon le DPS vaut 0 et les tests ne prouvent rien. */

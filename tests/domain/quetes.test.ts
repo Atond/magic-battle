@@ -9,9 +9,9 @@ import { etatInitial, tick } from '../../src/domain/moteur.ts'
 import * as moduleQuetes from '../../src/domain/quetes/index.ts'
 import { evaluerQuetes, jalonAtteint, queteAccomplie } from '../../src/domain/quetes/index.ts'
 import type { EtatJeu, ParametresQuete, TypeJalonQuete } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 
 /** Première quête du contrat pour un type de jalon donné. */
@@ -156,13 +156,26 @@ describe('EXG-54 — une seule fois, jamais deux', () => {
 describe('EXG-10 — la Renommée des quêtes ne sert qu\'à l\'équipement', () => {
   it('la Renommée créditée paie un palier d\'équipement, et rien d\'autre', () => {
     const base = etatNeuf()
+    // Toutes les quêtes accomplies d'un coup : la Renommée cumulée doit payer le premier palier
+    // d'équipement (ordre de grandeur voulu par `tools/idle-balance/graines.ts`, tenu par le contrat).
+    // Dérivé des seuils du contrat plutôt qu'un seul jalon, pour rester robuste à une future passe
+    // d'équilibrage qui changerait les montants relatifs quête / équipement.
+    const seuilZoneMax = Math.max(
+      ...C.quetes.filter((quete) => quete.typeJalon === 'zoneAtteinte').map((quete) => quete.seuil),
+    )
+    const seuilMonstresMax = Math.max(
+      ...C.quetes.filter((quete) => quete.typeJalon === 'monstresTues').map((quete) => quete.seuil),
+    )
     const productif: EtatJeu = {
       ...base,
       ecoles: { ...base.ecoles, feu: { niveau: 8, debloquee: true, revelee: true } },
-      magicien: { ...base.magicien, monstresTues: QUETE_MONSTRES.seuil },
+      combat: { ...base.combat, zone: seuilZoneMax },
+      magicien: { ...base.magicien, monstresTues: seuilMonstresMax },
+      prestige: { ...base.prestige, prestigesTotal: 1, zoneMaxDuRun: seuilZoneMax },
     }
     const apresQuete = evaluerQuetes(productif, C).etat
     const premierEquipement = C.equipement[0]
+    expect(apresQuete.bourse.renommee).toBeGreaterThanOrEqual(premierEquipement.coutBase)
 
     const achat = acheterEquipement(apresQuete, premierEquipement.id, C)
     expect(achat.accepte).toBe(true)

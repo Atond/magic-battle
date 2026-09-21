@@ -3,8 +3,8 @@
 // sauvegarde de secours (EXG-46), non-injection (EXG-47) et sauvegarde illisible (EXG-27).
 //
 // Aucune valeur d'équilibrage ici : le catalogue (sorts, nœuds, quêtes, améliorations, équipement) et
-// les bornes qui en découlent viennent de `graines.ts`. Les seules constantes littérales des tests sont
-// des bornes de structure (version de schéma, zone 1) et des charges d'attaque.
+// les bornes qui en découlent viennent de `src/donnees/constantes.ts`. Les seules constantes littérales
+// des tests sont des bornes de structure (version de schéma, zone 1) et des charges d'attaque.
 
 import { describe, expect, it } from 'vitest'
 
@@ -44,7 +44,7 @@ import {
 import type { MotifRefusImport, Schema } from '../../src/domain/sauvegarde/schema.ts'
 import { nbVagues, timerBossMs } from '../../src/domain/zones/formules.ts'
 import type { Constantes, EtatJeu, Sauvegarde } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
 /* ═════════════════════════════════════════════ EXG-24 — encodage base64 portable (T-10) */
 
@@ -104,7 +104,7 @@ describe('base64 — codec portable sans dépendance au navigateur ni à Node', 
 
 /* ════════════════════════════════════════════════════════ sérialisation, import, sécurité */
 
-const C: Constantes = GRAINES
+const C: Constantes = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 
 const DOSSIER_FIXTURES = path.join(import.meta.dirname, '..', 'migrations', 'fixtures')

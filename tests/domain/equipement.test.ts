@@ -11,9 +11,9 @@ import {
 } from '../../src/domain/equipement/index.ts'
 import { degatsParSeconde, etatInitial } from '../../src/domain/moteur.ts'
 import type { EtatJeu, IdEcole, ParametresAchatMultiplicatif } from '../../src/domain/types.ts'
-import { GRAINES } from '../../tools/idle-balance/graines.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 
-const C = GRAINES
+const C = CONSTANTES
 const HORODATAGE = 1_700_000_000_000
 const PREMIER: ParametresAchatMultiplicatif = C.equipement[0]
 const AMELIORATION: ParametresAchatMultiplicatif = C.ameliorations[0]
