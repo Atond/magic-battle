@@ -15,13 +15,6 @@ import type { Mesures, Mur } from './simuler.ts'
 import type { ResultatFidelite } from './fidelite.ts'
 import type { MesureBossFinal } from './simuler.ts'
 
-/** Ce que ce lot livre pour la zone dédiée du boss final (EXG-28) ; T-13 l'intègre à `ConstantesFin`. */
-export interface ParametresBossFinalLivres {
-  profondeurEquivalente: number
-  multPv: number
-  timerS: number
-}
-
 const H = 3_600_000
 const MIN = 60_000
 
@@ -65,7 +58,6 @@ export function ecrireConstantes(
   date: string,
   resume: readonly string[],
   nonTenues: Readonly<Record<string, string>>,
-  bossFinal: ParametresBossFinalLivres,
 ): void {
   const entete = [
     '// Constantes d\'équilibrage du jeu — **sortie du simulateur**, pas une saisie manuelle (ADR-10).',
@@ -78,10 +70,33 @@ export function ecrireConstantes(
     '// Mesures retenues, résumées (détail et méthode dans le rapport) :',
     ...resume.map((ligne) => `//   · ${ligne}`),
     '',
-    "import type { Constantes } from '../domain/types.ts'",
+    "import type { Constantes, ConstantesFin } from '../domain/types.ts'",
+    '',
+    '/**',
+    ' * EXG-28 — le bloc `fin` livré : le contrat actuel de `ConstantesFin` (`nAscensionsRequises`,',
+    ' * `zoneBossFinal`) **plus** les trois nombres qui décrivent le boss de la zone dédiée.',
+    ' *',
+    ' * Ils sont dans `fin` et non à côté parce que le moteur reçoit ses valeurs d\'équilibrage en **un',
+    " * seul** objet `Constantes` : les sortir obligerait à les lui passer en deux morceaux, ou à",
+    ' * recomposer l\'objet à la main dans cette couche.',
+    ' *',
+    ' * `zoneBossFinal` est l\'**identifiant** de la zone dédiée, pas une profondeur de progression : le',
+    ' * boss final ne vit pas sur l\'échelle normale des zones. Ses PV se calculent par',
+    ' * `pvBoss(pvProfondeurEquivalente) × pvMultiplicateur`, et son chrono est `timerBossFinalS`, distinct',
+    ' * de `zones.timerBossS`.',
+    ' *',
+    ' * **T-13** déplace ces trois champs dans `ConstantesFin` (`src/domain/types.ts`), câble l\'accès à la',
+    ' * zone dédiée (`ascensions ≥ nAscensionsRequises`) et le calcul des PV ; ce type local disparaît',
+    ' * alors, et `CONSTANTES` se réannote simplement `Constantes`.',
+    ' */',
+    'export interface ConstantesFinLivree extends ConstantesFin {',
+    '  readonly pvProfondeurEquivalente: number',
+    '  readonly pvMultiplicateur: number',
+    '  readonly timerBossFinalS: number',
+    '}',
     '',
     '/** §8 — l\'ensemble des valeurs d\'équilibrage passées au moteur pur. */',
-    `export const CONSTANTES: Constantes = ${serialiser(constantes, 0)}`,
+    `export const CONSTANTES: Omit<Constantes, 'fin'> & { readonly fin: ConstantesFinLivree } = ${serialiser(constantes, 0)}`,
     '',
     '/**',
     ' * Contraintes §8 que le rapport archivé documente comme NON tenues, et pourquoi.',
@@ -93,33 +108,11 @@ export function ecrireConstantes(
     `export const CONTRAINTES_NON_TENUES: Readonly<Record<string, string>> = ${serialiser(nonTenues, 0)}`,
     '',
     '/**',
-    " * EXG-28 — constantes de la **zone dédiée** du boss final. Exportées à côté de `CONSTANTES` et non",
-    " * dans `ConstantesFin`, parce que le type de `src/domain/types.ts` ne porte pas encore ces champs :",
-    " * T-13 les y intègre et câble la logique d'accès (`ascensions ≥ nAscensionsRequises`) ainsi que le",
-    ' * calcul des PV. Ici, seuls les nombres.',
-    ' *',
-    " * `zoneDediee` n'est **pas** une profondeur de progression : le boss final ne vit pas sur l'échelle",
-    ' * normale des zones, sinon le joueur le traverse pendant un run ordinaire. Ce n\'est qu\'un',
-    " * identifiant, choisi hors de portée de la progression mesurée. Les PV, eux, sont bien exprimés sur",
-    ' * la formule de zone du moteur pour rester cohérents avec `pvBaseVague1` et `multBoss` :',
-    ' *   `PV_boss_final = pvBoss(profondeurEquivalente) × multPv`.',
+    ' * Alias transitoire. Les nombres du boss final vivent désormais dans `CONSTANTES.fin` ; cet export',
+    " * n'existe que pour ne pas casser `src/donnees/fin.ts`, qui l'importe encore. Dès que cette vue lit",
+    ' * `CONSTANTES.fin`, retirer cet alias du générateur (`tools/idle-balance/sortie.ts`).',
     ' */',
-    'export interface ParametresBossFinal {',
-    '  readonly zoneDediee: number',
-    '  readonly profondeurEquivalente: number',
-    '  readonly multPv: number',
-    '  readonly timerS: number',
-    '}',
-    '',
-    `export const BOSS_FINAL: ParametresBossFinal = ${serialiser(
-      {
-        zoneDediee: constantes.fin.zoneBossFinal,
-        profondeurEquivalente: bossFinal.profondeurEquivalente,
-        multPv: bossFinal.multPv,
-        timerS: bossFinal.timerS,
-      },
-      0,
-    )}`,
+    'export const BOSS_FINAL = CONSTANTES.fin',
     '',
   ].join('\n')
   mkdirSync(dirname(chemin), { recursive: true })

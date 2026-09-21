@@ -651,7 +651,6 @@ function principal(): void {
     date(),
     resume,
     nonTenues,
-    bossDe(retenu),
   )
   ecrireRapport(cheminRapport, {
     date: date(),

@@ -10,6 +10,7 @@
 
 import type {
   Constantes,
+  ConstantesFin,
   IdArbre,
   IdEcole,
   ParametresAchatMultiplicatif,
@@ -125,11 +126,12 @@ export interface Parametres {
   /* — fin de partie (EXG-28, 44) — */
   nAscensionsRequises: number
   /**
-   * Identifiant de la **zone dédiée** du boss final (EXG-28). Ce n'est pas une profondeur de
-   * progression : le boss final ne vit pas sur l'échelle normale des zones, sinon le joueur le traverse
-   * au premier run — c'est exactement ce que la zone maximale mesurée (118) a révélé sur la valeur 50 de
-   * la v4. Cet entier ne sert qu'à nommer la zone ; sa seule exigence est de ne jamais entrer en
-   * collision avec la progression normale, ce que le rapport vérifie par la mesure.
+   * EXG-28 — **identifiant** de la zone dédiée du boss final, et seul identifiant : il n'y a pas de
+   * second champ `zoneDediee`, ce serait le même nombre sous deux noms. Ce n'est pas une profondeur de
+   * progression — le boss final ne vit pas sur l'échelle normale des zones, sinon le joueur le traverse
+   * au premier run, ce que la zone maximale mesurée (118) a révélé sur la valeur 50 de la v4. Cet entier
+   * ne sert qu'à nommer la zone ; sa seule exigence est de ne jamais entrer en collision avec la
+   * progression normale, ce que le rapport vérifie par la mesure.
    */
   zoneBossFinal: number
   /**
@@ -309,8 +311,29 @@ function equipement(p: Parametres): readonly ParametresAchatMultiplicatif[] {
   ]
 }
 
+/**
+ * EXG-28 — `fin` tel que ce lot le livre : le contrat de `src/domain/types.ts` (`nAscensionsRequises`,
+ * `zoneBossFinal`) **plus** les trois nombres qui décrivent le boss de la zone dédiée. Ils vivent dans
+ * `fin` et non à côté parce que le moteur reçoit ses valeurs d'équilibrage en **un seul** objet
+ * `Constantes` : les sortir obligerait soit à les lui passer en deux morceaux, soit à recomposer l'objet
+ * à la main dans `src/donnees/`.
+ *
+ * T-13 déplace ces trois champs dans `ConstantesFin` (`src/domain/types.ts`) et ce type local disparaît.
+ */
+export interface ConstantesFinLivree extends ConstantesFin {
+  /** Profondeur dont la formule de zone du moteur donne les PV de base du boss final. */
+  readonly pvProfondeurEquivalente: number
+  /** Multiplicateur appliqué à ces PV : `PV = pvBoss(pvProfondeurEquivalente) × pvMultiplicateur`. */
+  readonly pvMultiplicateur: number
+  /** Chrono du combat final en secondes (EXG-16 appliqué au boss final), distinct de `zones.timerBossS`. */
+  readonly timerBossFinalS: number
+}
+
+/** L'objet livré : un `Constantes` dont le bloc `fin` porte en plus les nombres du boss final. */
+export type ConstantesLivrees = Omit<Constantes, 'fin'> & { readonly fin: ConstantesFinLivree }
+
 /** Seule passerelle vecteur → contrat du moteur (§8). */
-export function construireConstantes(p: Parametres): Constantes {
+export function construireConstantes(p: Parametres): ConstantesLivrees {
   return {
     tick: { nTicksMax: p.nTicksMax },
     horsLigne: { plafondHeures: p.plafondHeures },
@@ -347,7 +370,13 @@ export function construireConstantes(p: Parametres): Constantes {
     noeuds: [...noeudsEclats(p), ...noeudsAscension(p)],
     ameliorations: ameliorations(p),
     equipement: equipement(p),
-    fin: { nAscensionsRequises: p.nAscensionsRequises, zoneBossFinal: p.zoneBossFinal },
+    fin: {
+      nAscensionsRequises: p.nAscensionsRequises,
+      zoneBossFinal: p.zoneBossFinal,
+      pvProfondeurEquivalente: p.bossFinalProfondeurEquivalente,
+      pvMultiplicateur: p.bossFinalMultPv,
+      timerBossFinalS: p.bossFinalTimerS,
+    },
   }
 }
 
