@@ -6,13 +6,34 @@
 #   (p) pureté de src/domain/ — aucun import react / zustand / DOM (spec §9, invariant 1) ;
 #   (g) aucune graine d'équilibrage dans src/ — « à valider », « graine » (spec ADR-10, invariant 2).
 # Lancé à la main (`bash scripts/verify.sh` / `npm run verify`) ET par le hook Stop.
+#
+# Mode strict — `bash scripts/verify.sh --strict` (ou `VERIFY_STRICT=1`) : toute étape IGNORÉE devient un
+# ÉCHEC. La tolérance ci-dessus est ce qui permet de travailler pendant la vague 1, où `equilibrage:check`
+# n'existe pas encore ; en CI elle devient un angle mort, car un `node_modules` non installé ou un script
+# npm disparu du `package.json` produirait IGNORÉ → sortie 0 → « vert ». Le mode strict est donc réservé
+# à la CI, et n'y est branché qu'une fois toutes les étapes réellement présentes (T-16).
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 0
+
+strict=0
+for argument in "$@"; do
+  case "$argument" in
+    --strict) strict=1 ;;
+    *) echo "verify.sh : argument inconnu « $argument » (seul --strict est reconnu)." >&2; exit 64 ;;
+  esac
+done
+[ "${VERIFY_STRICT:-0}" = "1" ] && strict=1
 
 fail=0
 lignes=()
 ok()     { lignes+=("  OK      — $1"); }
-ignore() { lignes+=("  IGNORÉ  — $1 ($2)"); }
+ignore() {
+  if [ "$strict" -eq 1 ]; then
+    lignes+=("  ÉCHEC   — $1 (ignorée, refusée en mode strict : $2)"); fail=1
+  else
+    lignes+=("  IGNORÉ  — $1 ($2)")
+  fi
+}
 echec()  { lignes+=("  ÉCHEC   — $1"); fail=1; }
 
 a_script_npm() {

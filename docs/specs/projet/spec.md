@@ -1,11 +1,17 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 3 — 2026-09-20 —
-> **validée par l'utilisateur le 2026-09-20** après deux tours de challenge (`challenge-v1.md`, `challenge-v2.md`).
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 4 — 2026-09-21 —
+> corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
+> `challenge-v2.md`) ; la v4 n'ajoute qu'ADR-16, tranché en cours de vague 1 et validé le 2026-09-21.
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v3 (2026-09-21)
+Un seul ajout, issu de l'implémentation de la vague 1 : **ADR-16** (§15) tranche ce que la spec laissait
+ouvert sur le périmètre du reset de prestige — les paliers d'améliorations sont remis à zéro, ceux
+d'équipement survivent. Aucune exigence modifiée, aucune formule touchée, aucun renumérotage.
 
 ## Changements depuis v2 (2026-09-20)
 Base : `challenge-v2.md` (13 points) + `interview.md` §« Complément après challenge de la spec v2 ». Détail
@@ -620,6 +626,17 @@ arbitrages stratégiques restant à trancher.
   (`zone_max^α`, `(1+B×Éclats)^β` ou multiplicatif équivalent) en plus des valeurs. Écarté : figer les
   formes a priori et ne faire varier que les constantes (c'est précisément ce qui produisait l'espace de
   recherche vide, cause du trou bloquant).
+- **ADR-16** (2026-09-21) — Le reset de prestige (EXG-19) remet à zéro les **paliers d'améliorations**
+  (achetés en or) et **laisse survivre les paliers d'équipement** (achetés en Renommée). Raison : EXG-19
+  n'énumérait que zone, or et niveaux d'écoles, mais T-6 devait trancher le sort des deux guichets de
+  multiplicateurs de T-8. Côté équipement le choix est forcé : la Renommée vient de quêtes-jalons
+  explicitement non répétables (EXG-54), donc un équipement remis à zéro serait définitivement
+  irrécupérable et le joueur perdrait du contenu à chaque prestige. Côté améliorations, l'or est la monnaie
+  du run (il est lui-même remis à zéro) : garder ses paliers viderait le prestige de son sens de reset et
+  donnerait au simulateur une courbe sans point de rupture. Règle générale qui en découle, valable pour
+  tout futur guichet : **un achat se réinitialise avec la monnaie qui l'a payé**. Écarté : tout remettre à
+  zéro (perte sèche de Renommée non regagnable, contredit EXG-54) ; tout conserver (le prestige ne
+  réinitialise plus rien de la chaîne de DPS, contredit l'intention d'ADR-2 et d'ADR-8).
 
 ## 16. Livraison par vagues
 
