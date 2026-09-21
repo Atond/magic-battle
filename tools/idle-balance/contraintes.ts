@@ -341,7 +341,8 @@ export function c13BossFinal(m: Mesures): Verdict {
       cible: 'PV et chrono fournis par `src/donnees/`',
       ecart: -1,
       ok: false,
-      detail: '`src/donnees/constantes.ts` doit exporter `BOSS_FINAL` (profondeur équivalente, multiplicateur de PV, chrono)',
+      detail:
+      '`src/donnees/constantes.ts` doit porter dans `CONSTANTES.fin` les champs `pvProfondeurEquivalente`, `pvMultiplicateur` et `timerBossFinalS` (EXG-28)',
     }
   }
   const partRun =

@@ -31,19 +31,30 @@ async function chargerConstantes(chemin: string): Promise<{
     throw new Error(`\`${chemin}\` n'exporte ni \`CONSTANTES\` ni export par défaut exploitable.`)
   }
   const nonTenues = module['CONTRAINTES_NON_TENUES']
-  // EXG-28 — les constantes de la zone dédiée du boss final sont exportées à côté de `CONSTANTES` :
-  // le type `ConstantesFin` ne les porte pas encore (T-13). Absentes, la contrainte C13 échoue.
-  const boss = module['BOSS_FINAL']
+  // EXG-28 — les nombres du boss de la zone dédiée sont lus dans `fin`, comme le reste de
+  // l'équilibrage : un seul objet, une seule source. Absents, la contrainte C13 échoue.
+  const fin = (candidat as Constantes).fin as Partial<{
+    pvProfondeurEquivalente: number
+    pvMultiplicateur: number
+    timerBossFinalS: number
+  }>
+  const complet =
+    typeof fin.pvProfondeurEquivalente === 'number' &&
+    typeof fin.pvMultiplicateur === 'number' &&
+    typeof fin.timerBossFinalS === 'number'
   return {
     constantes: candidat as Constantes,
     nonTenues:
       typeof nonTenues === 'object' && nonTenues !== null
         ? (nonTenues as Readonly<Record<string, string>>)
         : {},
-    bossFinal:
-      typeof boss === 'object' && boss !== null
-        ? (boss as OptionsSimulation['bossFinal'])
-        : undefined,
+    bossFinal: complet
+      ? {
+          profondeurEquivalente: fin.pvProfondeurEquivalente!,
+          multPv: fin.pvMultiplicateur!,
+          timerS: fin.timerBossFinalS!,
+        }
+      : undefined,
   }
 }
 

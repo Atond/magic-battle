@@ -11,6 +11,15 @@
 // n'est posée « à l'intuition » (ADR-10).
 //
 // Sorties : `src/donnees/constantes.ts` et `tools/idle-balance/rapports/<date>.md`.
+//
+// DEUX MODES, et le second évite de perdre une demi-heure pour rien :
+//   · `npm run equilibrage:search` — recherche complète (~35 min). À lancer quand une **valeur** doit
+//     changer, ou quand une contrainte de §8 a bougé.
+//   · `EQUILIBRAGE_REGENERER=1 npx tsx tools/idle-balance/search.ts` — régénère `src/donnees/` à partir
+//     du dernier vecteur archivé (`rapports/*.vecteur.json`), sans relancer la moindre simulation de
+//     recherche, et **sans toucher au rapport**. C'est le chemin à prendre quand seule la **forme** du
+//     fichier généré change (champ déplacé, renommé, export retiré) : les valeurs sont identiques, donc
+//     relancer une descente brouillerait la provenance du vecteur sans rien apporter.
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { controlerFidelite, type ResultatFidelite } from './fidelite.ts'
@@ -556,7 +565,52 @@ function date(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * Chemin rapide : régénérer `src/donnees/constantes.ts` depuis le vecteur déjà archivé, sans relancer
+ * la moindre recherche. Sert quand seule la **forme** du fichier généré change (renommage, champ
+ * déplacé) et pas les valeurs — relancer une descente de 35 minutes pour un déplacement de trois lignes
+ * n'aurait aucun sens, et rendrait en plus la provenance illisible en réécrivant le rapport.
+ *
+ * `EQUILIBRAGE_REGENERER=1 npx tsx tools/idle-balance/search.ts`
+ */
+function regenerer(): void {
+  const archives = vecteursArchives()
+  const dernier = archives[archives.length - 1]
+  if (dernier === undefined) {
+    console.error('equilibrage:search — aucun vecteur archivé à régénérer (rapports/*.vecteur.json).')
+    process.exitCode = 1
+    return
+  }
+  const constantes = construireConstantes(dernier.parametres)
+  const mesures = simulerPartie(constantes, { bossFinal: bossDe(dernier.parametres) })
+  const rapport = verifier(constantes, mesures)
+  const nonTenues: Record<string, string> = {}
+  for (const verdict of rapport.verdicts) {
+    if (verdict.ok) continue
+    nonTenues[verdict.id] = `${verdict.libelle} — mesuré ${verdict.mesure}, cible ${verdict.cible}.`
+  }
+  const cheminRapport = `${DOSSIER_RAPPORTS}/${date()}.md`
+  ecrireConstantes(
+    'src/donnees/constantes.ts',
+    constantes,
+    cheminRapport,
+    date(),
+    [
+      `régénération de forme depuis « ${dernier.nom} » — valeurs inchangées, aucune recherche relancée`,
+      `contraintes §8 : ${rapport.verdicts.filter((v) => v.ok).length}/${rapport.verdicts.length} tenues`,
+    ],
+    nonTenues,
+  )
+  console.log(
+    `equilibrage:search — régénération seule depuis « ${dernier.nom} » : ${rapport.verdicts.filter((v) => v.ok).length}/${rapport.verdicts.length} contraintes tenues, ${Object.keys(nonTenues).length} dérogation(s). Rapport inchangé.`,
+  )
+}
+
 function principal(): void {
+  if (process.env['EQUILIBRAGE_REGENERER'] === '1') {
+    regenerer()
+    return
+  }
   const t0 = Date.now()
   const budget = Number(process.env['EQUILIBRAGE_BUDGET'] ?? 900)
   console.log(`equilibrage:search — descente par coordonnées, une variable à la fois (budget ${budget} évaluations)`)

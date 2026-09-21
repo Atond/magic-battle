@@ -5,10 +5,18 @@
 //
 // La vague 3 ajoutera ici les textes de fin de partie (boss final, épilogue) à côté de ces nombres.
 
-import { BOSS_FINAL, CONSTANTES } from './constantes.ts'
+import { CONSTANTES } from './constantes.ts'
 
-/** §8 — nombre d'Ascensions requises et numéro de la zone dédiée du boss final. */
+/**
+ * EXG-28 / EXG-44 — conditions de fin de partie et zone dédiée du boss final.
+ *
+ * Les cinq champs vivent désormais dans `fin` : `nAscensionsRequises`, `zoneBossFinal`,
+ * `pvProfondeurEquivalente`, `pvMultiplicateur`, `timerBossFinalS`.
+ *
+ * `zoneBossFinal` est le **nom** de la zone dédiée, jamais une profondeur de progression : le boss final
+ * ne vit pas sur l'échelle normale des zones, sinon le joueur le croiserait pendant un run ordinaire (la
+ * profondeur maximale mesurée est 118). Ses PV ne s'en déduisent donc pas — ils valent
+ * `pvBoss(pvProfondeurEquivalente) × pvMultiplicateur`, et son chrono est `timerBossFinalS`, distinct de
+ * `zones.timerBossS`.
+ */
 export const FIN = CONSTANTES.fin
-
-/** EXG-28 — constantes numériques de la zone dédiée du boss final (PV, timer). */
-export const PARAMETRES_BOSS_FINAL = BOSS_FINAL

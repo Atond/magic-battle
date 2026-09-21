@@ -107,13 +107,6 @@ export function ecrireConstantes(
     ' */',
     `export const CONTRAINTES_NON_TENUES: Readonly<Record<string, string>> = ${serialiser(nonTenues, 0)}`,
     '',
-    '/**',
-    ' * Alias transitoire. Les nombres du boss final vivent désormais dans `CONSTANTES.fin` ; cet export',
-    " * n'existe que pour ne pas casser `src/donnees/fin.ts`, qui l'importe encore. Dès que cette vue lit",
-    ' * `CONSTANTES.fin`, retirer cet alias du générateur (`tools/idle-balance/sortie.ts`).',
-    ' */',
-    'export const BOSS_FINAL = CONSTANTES.fin',
-    '',
   ].join('\n')
   mkdirSync(dirname(chemin), { recursive: true })
   writeFileSync(chemin, entete, 'utf8')

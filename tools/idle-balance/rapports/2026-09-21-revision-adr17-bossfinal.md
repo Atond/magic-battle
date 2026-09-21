@@ -126,3 +126,29 @@ Ce que T-13 doit câbler, et que le moteur ne fait pas encore :
 la colonne « fourchette verte » est donc vide pour cette variable, non parce qu'aucune valeur ne marche
 mais parce qu'aucun **candidat de la grille** ne préserve les contraintes. La valeur retenue vient de la
 descente, pas du balayage ; elle est dans un creux étroit entre deux points de grille.
+
+## 7. Correctif de forme (même jour, valeurs inchangées)
+
+Les quatre nombres du boss final sont désormais émis **dans `CONSTANTES.fin`** et non plus dans un
+export `BOSS_FINAL` posé à côté : le moteur reçoit ses valeurs d'équilibrage en un seul objet
+`Constantes`, et les laisser dehors aurait obligé soit à les lui passer en deux morceaux, soit à
+recomposer l'objet à la main dans `src/donnees/`. Forme livrée :
+`fin: { nAscensionsRequises, zoneBossFinal, pvProfondeurEquivalente, pvMultiplicateur, timerBossFinalS }`.
+`zoneDediee` est supprimé : il doublait `zoneBossFinal`, qui reste le **seul** identifiant de la zone
+dédiée — un nom de zone, jamais une profondeur de progression. Aucune valeur n'a bougé, aucune recherche
+n'a été relancée : la régénération est passée par `EQUILIBRAGE_REGENERER=1`, qui relit le vecteur archivé
+et ne réécrit que le fichier généré (13/13, zéro dérogation).
+
+## 8. Deux modes d'exécution du simulateur (à lire avant de relancer quoi que ce soit)
+
+- `npm run equilibrage:search` — recherche complète, environ 35 min. À lancer quand une **valeur** doit
+  changer, ou quand une contrainte de §8 a bougé.
+- `EQUILIBRAGE_REGENERER=1 npx tsx tools/idle-balance/search.ts` — régénère `src/donnees/constantes.ts`
+  à partir du dernier vecteur archivé (`rapports/*.vecteur.json`), sans relancer une seule simulation de
+  recherche et **sans toucher au rapport**. C'est le chemin à prendre quand seule la **forme** du fichier
+  généré change (champ déplacé, renommé, export retiré) : les valeurs sont identiques, donc relancer une
+  descente brouillerait la provenance du vecteur sans rien apporter.
+
+L'alias transitoire `BOSS_FINAL` a été retiré du générateur une fois `src/donnees/fin.ts` nettoyé ; le
+type `ParametresBossFinal` avait déjà disparu avec le déplacement des champs dans `fin`. Plus aucune
+référence à l'un ou à l'autre dans `src/`, `tests/` ou `tools/`.
