@@ -124,7 +124,23 @@ export interface Parametres {
 
   /* — fin de partie (EXG-28, 44) — */
   nAscensionsRequises: number
+  /**
+   * Identifiant de la **zone dédiée** du boss final (EXG-28). Ce n'est pas une profondeur de
+   * progression : le boss final ne vit pas sur l'échelle normale des zones, sinon le joueur le traverse
+   * au premier run — c'est exactement ce que la zone maximale mesurée (118) a révélé sur la valeur 50 de
+   * la v4. Cet entier ne sert qu'à nommer la zone ; sa seule exigence est de ne jamais entrer en
+   * collision avec la progression normale, ce que le rapport vérifie par la mesure.
+   */
   zoneBossFinal: number
+  /**
+   * PV du boss final, exprimés sur la formule de zone pour rester cohérents avec `pvBaseVague1` et
+   * `multBoss` : `PV = pvBoss(bossFinalProfondeurEquivalente) × bossFinalMultPv`. Sorties du
+   * simulateur : la profondeur équivalente et le multiplicateur sont cherchés, pas choisis.
+   */
+  bossFinalProfondeurEquivalente: number
+  bossFinalMultPv: number
+  /** Chrono du combat final, en secondes (EXG-16 s'applique au boss final, EXG-28). */
+  bossFinalTimerS: number
 }
 
 /* ───────────────────────────────────────────────────────────────── construction des sous-objets */
@@ -402,5 +418,8 @@ export const PARAMETRES_DEPART: Parametres = {
   ascSynergieParRang: 0.05,
 
   nAscensionsRequises: 4,
-  zoneBossFinal: 50,
+  zoneBossFinal: 1_000,
+  bossFinalProfondeurEquivalente: 120,
+  bossFinalMultPv: 1,
+  bossFinalTimerS: 60,
 }

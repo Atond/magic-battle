@@ -87,18 +87,31 @@ export function c03PremierPrestige(m: Mesures): Verdict {
   }
 }
 
-/** §8 — « aucun mur > 90 min avant le 1er prestige » (contrainte dure). */
-export function c04MurAvantPrestige(m: Mesures): Verdict {
-  const plafond = 90 * MIN
-  const pire = Math.max(m.blocageMaxAvantPrestigeMs, m.murAchatMaxAvantPrestigeMs)
+/**
+ * §8 v5 — « aucun **blocage de progression** > 90 min avant le 1er prestige », où un blocage est un
+ * intervalle sans aucune zone gagnée. Le mur au sens littéral « aucun achat abordable » est mesuré
+ * séparément comme **garde secondaire à 15 min** : la question ouverte §14 a été fermée par les mesures
+ * de T-14 (il ne dépasse jamais 0,5 min, donc il ne mesure rien tout seul). ADR-17.
+ */
+export function c04BlocageAvantPrestige(m: Mesures): Verdict {
+  const plafondBlocage = 90 * MIN
+  const plafondAchat = 15 * MIN
+  const blocage = m.blocageMaxAvantPrestigeMs
+  const achat = m.murAchatMaxAvantPrestigeMs
+  const okBlocage = blocage <= plafondBlocage
+  const okAchat = achat <= plafondAchat
+  const ecart = Math.max(
+    okBlocage ? 0 : (blocage - plafondBlocage) / plafondBlocage,
+    okAchat ? 0 : (achat - plafondAchat) / plafondAchat,
+  )
   return {
     id: 'C04',
-    libelle: 'aucun mur > 90 min avant le 1er prestige (§8)',
-    mesure: mn(pire),
+    libelle: 'blocage de progression ≤ 90 min avant le 1er prestige (§8 v5)',
+    mesure: mn(blocage),
     cible: '≤ 90 min',
-    ecart: pire <= plafond ? 0 : (pire - plafond) / plafond,
-    ok: pire <= plafond,
-    detail: `blocage de profondeur ${mn(m.blocageMaxAvantPrestigeMs)} · absence d'achat abordable ${mn(m.murAchatMaxAvantPrestigeMs)}`,
+    ecart,
+    ok: okBlocage && okAchat,
+    detail: `garde secondaire « aucun achat abordable » : ${mn(achat)} (seuil 15 min, ${okAchat ? 'tenu' : 'dépassé'})`,
   }
 }
 
@@ -132,37 +145,58 @@ export function c06DureeTotale(m: Mesures): Verdict {
   }
 }
 
-/** §8 — durée de run croissante, plancher 2 h, plafond 24 h. */
+/**
+ * §8 v5 / ADR-17 — durée d'un run **stable ou croissante à 10 % près** : aucun run ne dure moins de
+ * 90 % du précédent, plancher 2 h, plafond 24 h. Le critère « croissante » de la v4 a été amendé après
+ * la démonstration de T-14 : la durée d'un run vaut `patience × g/(g−1)`, un point fixe du design que
+ * les multiplicateurs de méta ne déplacent pas. La tolérance de 10 % est explicite parce que la durée
+ * oscille de quelques pour cent d'un run au suivant selon l'ordre des achats.
+ */
 export function c07DureesRun(m: Mesures): Verdict {
   const runs = m.runs.filter((run) => run.dureeMs > 0)
   if (runs.length === 0) {
-    return { id: 'C07', libelle: 'durées de run (§8)', mesure: 'aucun run', cible: 'croissantes, 2 h → ≤ 24 h', ecart: -1, ok: false }
+    return {
+      id: 'C07',
+      libelle: 'durée de run (§8 v5, ADR-17)',
+      mesure: 'aucun run',
+      cible: 'stable ou croissante à 10 % près, 2 h ≤ durée ≤ 24 h',
+      ecart: -1,
+      ok: false,
+    }
   }
   const durees = runs.map((run) => run.dureeMs)
   const plancher = Math.min(...durees)
   const plafond = Math.max(...durees)
-  // « Croissante » avec la tolérance d'un jeu à événements discrets : un run ne descend pas sous 95 %
-  // du précédent (une baisse plus forte est une vraie régression de rythme, pas un arrondi).
+  // ADR-17 — tolérance de 10 % : aucun run ne dure moins de 90 % du précédent.
+  const TOLERANCE = 0.9
   const regressions: string[] = []
+  let pireRapport = Number.POSITIVE_INFINITY
   for (let i = 1; i < durees.length; i += 1) {
-    if (durees[i]! < 0.95 * durees[i - 1]!) {
-      regressions.push(`run ${i + 1} : ${(durees[i]! / H).toFixed(2)} h < ${(durees[i - 1]! / H).toFixed(2)} h`)
+    const rapport = durees[i]! / durees[i - 1]!
+    if (rapport < pireRapport) pireRapport = rapport
+    if (rapport < TOLERANCE) {
+      regressions.push(
+        `run ${i + 1} : ${(durees[i]! / H).toFixed(2)} h = ${(rapport * 100).toFixed(0)} % de ${(durees[i - 1]! / H).toFixed(2)} h`,
+      )
     }
   }
   const ok = plancher >= 2 * H && plafond <= 24 * H && regressions.length === 0
   const ecart = Math.max(
     Math.abs(ecartIntervalle(plancher, 2 * H, 24 * H)),
     Math.abs(ecartIntervalle(plafond, 2 * H, 24 * H)),
-    regressions.length > 0 ? 0.01 * regressions.length : 0,
+    regressions.length > 0 ? (TOLERANCE - pireRapport) / TOLERANCE : 0,
   )
   return {
     id: 'C07',
-    libelle: 'durée de run croissante, 2 h ≤ durée ≤ 24 h (§8)',
-    mesure: `${(plancher / H).toFixed(2)} h → ${(plafond / H).toFixed(2)} h sur ${runs.length} runs`,
-    cible: 'croissante, plancher 2 h, plafond 24 h',
+    libelle: 'durée de run stable ou croissante à 10 % près, 2 h ≤ durée ≤ 24 h (§8 v5, ADR-17)',
+    mesure: `${(plancher / H).toFixed(2)} h → ${(plafond / H).toFixed(2)} h sur ${runs.length} runs, pire rapport d'un run au suivant ${(pireRapport * 100).toFixed(1)} %`,
+    cible: '≥ 90 % du run précédent, plancher 2 h, plafond 24 h',
     ecart: ok ? 0 : -ecart,
     ok,
-    detail: regressions.length === 0 ? 'aucune régression' : `${regressions.length} régression(s) : ${regressions.slice(0, 4).join(' · ')}`,
+    detail:
+      regressions.length === 0
+        ? `aucun run sous 90 % du précédent (marge ${((pireRapport - TOLERANCE) * 100).toFixed(1)} points)`
+        : `${regressions.length} run(s) sous la tolérance : ${regressions.slice(0, 4).join(' · ')}`,
   }
 }
 
@@ -287,6 +321,61 @@ export function c12Arbres(constantes: Constantes): Verdict {
   }
 }
 
+/**
+ * EXG-28 — la zone **dédiée** du boss final doit héberger un vrai combat. Quatre conditions, chacune
+ * mesurée sur le dernier run (celui qui suit la dernière Ascension requise) :
+ *  1. le boss n'est **pas** battable au départ de ce run — sinon la fin de partie est une formalité,
+ *     et c'est exactement ce que produisait `zoneBossFinal = 50` sur l'échelle normale des zones ;
+ *  2. il est battable **avant** que le joueur cesse de progresser, sinon la fin est inatteignable ;
+ *  3. le combat consomme entre 25 % et 95 % du chrono : ni gagné en un tick, ni photo-finish ;
+ *  4. la victoire arrive dans la **seconde moitié** du dernier run (c'est le point culminant), sans
+ *     coller au moment où le joueur décroche.
+ */
+export function c13BossFinal(m: Mesures): Verdict {
+  const boss = m.bossFinal
+  if (boss === null) {
+    return {
+      id: 'C13',
+      libelle: 'boss final : vrai combat dans sa zone dédiée (EXG-28)',
+      mesure: 'non mesuré — constantes du boss final absentes',
+      cible: 'PV et chrono fournis par `src/donnees/`',
+      ecart: -1,
+      ok: false,
+      detail: '`src/donnees/constantes.ts` doit exporter `BOSS_FINAL` (profondeur équivalente, multiplicateur de PV, chrono)',
+    }
+  }
+  const partRun =
+    boss.tempsAvantVictoireMs === null || boss.dureeDernierRunMs <= 0
+      ? null
+      : boss.tempsAvantVictoireMs / boss.dureeDernierRunMs
+  const echecs: string[] = []
+  if (boss.gagneDesLeDepart) echecs.push('battable dès le départ du dernier run (formalité)')
+  if (boss.tempsAvantVictoireMs === null) echecs.push('jamais battable dans le dernier run')
+  if (boss.partDuChrono !== null && (boss.partDuChrono < 0.25 || boss.partDuChrono > 0.95)) {
+    echecs.push(`combat à ${(boss.partDuChrono * 100).toFixed(0)} % du chrono (cible 25-95 %)`)
+  }
+  if (partRun !== null && (partRun < 0.5 || partRun > 0.98)) {
+    echecs.push(`victoire à ${(partRun * 100).toFixed(0)} % du dernier run (cible 50-98 %)`)
+  }
+  if (!(boss.pvBoss < 1e300)) echecs.push('PV du boss final ≥ 1e300')
+
+  return {
+    id: 'C13',
+    libelle: 'boss final : vrai combat dans sa zone dédiée (EXG-28)',
+    mesure:
+      boss.tempsAvantVictoireMs === null
+        ? `PV ${boss.pvBoss.toExponential(2)}, jamais battu (DPS soutenu max ${boss.dpsMaxDernierRun.toExponential(2)})`
+        : `combat de ${boss.dureeCombatS!.toFixed(1)} s sur un chrono de ${boss.timerS} s (${(boss.partDuChrono! * 100).toFixed(0)} %), gagnable après ${(boss.tempsAvantVictoireMs / H).toFixed(2)} h du dernier run`,
+    cible: 'combat 25-95 % du chrono, gagnable à 50-98 % du dernier run, jamais dès le départ',
+    ecart: echecs.length === 0 ? 0 : -echecs.length,
+    ok: echecs.length === 0,
+    detail:
+      echecs.length === 0
+        ? `PV ${boss.pvBoss.toExponential(2)} · zone atteinte à la victoire ${boss.zoneVictoire} · DPS soutenu ${boss.dpsAuMoment.toExponential(2)} (départ du run ${boss.dpsDepartDernierRun.toExponential(2)}, soit ×${(boss.dpsAuMoment / Math.max(boss.dpsDepartDernierRun, 1)).toExponential(1)} de progression dans le run)`
+        : echecs.join(' · '),
+  }
+}
+
 /* ──────────────────────────────────────────────────────────────────────────── agrégation */
 
 export interface Rapport {
@@ -301,7 +390,7 @@ export function verifier(constantes: Constantes, mesures: Mesures): Rapport {
     c01PremierSort(mesures),
     c02PremierMur(mesures),
     c03PremierPrestige(mesures),
-    c04MurAvantPrestige(mesures),
+    c04BlocageAvantPrestige(mesures),
     c05CoupleFin(constantes),
     c06DureeTotale(mesures),
     c07DureesRun(mesures),
@@ -310,6 +399,7 @@ export function verifier(constantes: Constantes, mesures: Mesures): Rapport {
     c10PlafondHorsLigne(constantes),
     c11ProfondeurCroissante(mesures),
     c12Arbres(constantes),
+    c13BossFinal(mesures),
   ]
   return {
     verdicts,

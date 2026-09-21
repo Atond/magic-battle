@@ -5,7 +5,7 @@
 // rapport qui l'a produit par son chemin et sa date. Aucun marqueur de travail en cours n'y est écrit
 // (`scripts/verify.sh` les refuse dans tout `src/`).
 
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { Constantes } from '../../src/domain/types.ts'
 import type { Parametres } from './parametres.ts'
@@ -13,6 +13,14 @@ import type { Rapport } from './contraintes.ts'
 import { tableau } from './contraintes.ts'
 import type { Mesures, Mur } from './simuler.ts'
 import type { ResultatFidelite } from './fidelite.ts'
+import type { MesureBossFinal } from './simuler.ts'
+
+/** Ce que ce lot livre pour la zone dédiée du boss final (EXG-28) ; T-13 l'intègre à `ConstantesFin`. */
+export interface ParametresBossFinalLivres {
+  profondeurEquivalente: number
+  multPv: number
+  timerS: number
+}
 
 const H = 3_600_000
 const MIN = 60_000
@@ -57,6 +65,7 @@ export function ecrireConstantes(
   date: string,
   resume: readonly string[],
   nonTenues: Readonly<Record<string, string>>,
+  bossFinal: ParametresBossFinalLivres,
 ): void {
   const entete = [
     '// Constantes d\'équilibrage du jeu — **sortie du simulateur**, pas une saisie manuelle (ADR-10).',
@@ -82,6 +91,35 @@ export function ecrireConstantes(
     " * aussi — pour qu'une dérogation périmée ne survive jamais à sa raison d'être.",
     ' */',
     `export const CONTRAINTES_NON_TENUES: Readonly<Record<string, string>> = ${serialiser(nonTenues, 0)}`,
+    '',
+    '/**',
+    " * EXG-28 — constantes de la **zone dédiée** du boss final. Exportées à côté de `CONSTANTES` et non",
+    " * dans `ConstantesFin`, parce que le type de `src/domain/types.ts` ne porte pas encore ces champs :",
+    " * T-13 les y intègre et câble la logique d'accès (`ascensions ≥ nAscensionsRequises`) ainsi que le",
+    ' * calcul des PV. Ici, seuls les nombres.',
+    ' *',
+    " * `zoneDediee` n'est **pas** une profondeur de progression : le boss final ne vit pas sur l'échelle",
+    ' * normale des zones, sinon le joueur le traverse pendant un run ordinaire. Ce n\'est qu\'un',
+    " * identifiant, choisi hors de portée de la progression mesurée. Les PV, eux, sont bien exprimés sur",
+    ' * la formule de zone du moteur pour rester cohérents avec `pvBaseVague1` et `multBoss` :',
+    ' *   `PV_boss_final = pvBoss(profondeurEquivalente) × multPv`.',
+    ' */',
+    'export interface ParametresBossFinal {',
+    '  readonly zoneDediee: number',
+    '  readonly profondeurEquivalente: number',
+    '  readonly multPv: number',
+    '  readonly timerS: number',
+    '}',
+    '',
+    `export const BOSS_FINAL: ParametresBossFinal = ${serialiser(
+      {
+        zoneDediee: constantes.fin.zoneBossFinal,
+        profondeurEquivalente: bossFinal.profondeurEquivalente,
+        multPv: bossFinal.multPv,
+        timerS: bossFinal.timerS,
+      },
+      0,
+    )}`,
     '',
   ].join('\n')
   mkdirSync(dirname(chemin), { recursive: true })
@@ -124,6 +162,8 @@ export interface ContenuRapport {
   horsLigne: readonly string[]
   /** Diagnostic de la contrainte « durée de run croissante » (§8), généré par le script. */
   diagnosticC07: readonly string[]
+  /** EXG-28 — mesure du combat final. */
+  bossFinal: MesureBossFinal | null
   dureeSearchMs: number
   dureeCheckMs: number
 }
@@ -153,6 +193,34 @@ function listeRuns(mesures: Mesures): string {
   ].join('\n')
 }
 
+/**
+ * Journaux de révision archivés à côté du rapport (`*-revision-*.md`), recensés en tête de celui-ci.
+ *
+ * Ce rapport est **régénéré** à chaque `equilibrage:search` : tout ce qu'on y écrirait à la main
+ * disparaîtrait à l'exécution suivante. Les décisions et les comparaisons qui doivent survivre vivent
+ * donc dans des fichiers datés séparés, et cette fonction garantit qu'on ne les perd pas de vue.
+ */
+function revisions(dossier: string): string[] {
+  if (!existsSync(dossier)) return []
+  const fichiers = readdirSync(dossier)
+    .filter((nom) => nom.includes('-revision-') && nom.endsWith('.md'))
+    .sort()
+  if (fichiers.length === 0) return []
+  return [
+    '## 0. Journaux de révision',
+    '',
+    'Ce rapport est régénéré à chaque exécution du simulateur. Les décisions, arbitrages et comparaisons',
+    'qui doivent survivre à une régénération sont archivés à part :',
+    '',
+    ...fichiers.map((nom) => {
+      const premiereLigne =
+        readFileSync(`${dossier}/${nom}`, 'utf8').split('\n')[0]?.replace(/^#+\s*/, '') ?? nom
+      return `- \`${dossier}/${nom}\` — ${premiereLigne}`
+    }),
+    '',
+  ]
+}
+
 export function ecrireRapport(chemin: string, contenu: ContenuRapport): void {
   const m = contenu.mesures
   const p = contenu.parametres
@@ -168,6 +236,7 @@ export function ecrireRapport(chemin: string, contenu: ContenuRapport): void {
     '`npm run equilibrage:check`. Source des contraintes : `docs/specs/projet/spec.md` §8 (ADR-10, ADR-15).',
     `Recherche : ${(contenu.dureeSearchMs / 1000).toFixed(1)} s · vérification : ${contenu.dureeCheckMs} ms.`,
     '',
+    ...revisions(dirname(chemin)),
     '## 1. Verdict par contrainte §8',
     '',
     tableau(contenu.rapport),
@@ -238,6 +307,34 @@ export function ecrireRapport(chemin: string, contenu: ContenuRapport): void {
     '## 7 bis. Durée de run croissante (§8) — la contrainte qui n\'est pas tenue',
     '',
     ...contenu.diagnosticC07,
+    '',
+    '## 7 ter. Boss final — zone dédiée (EXG-28)',
+    '',
+    ...(contenu.bossFinal === null
+      ? ['_non mesuré._']
+      : [
+          `La v4 plaçait le boss final à \`zoneBossFinal = 50\` **sur l'échelle normale des zones**. La`,
+          `mesure a montré que le joueur traverse la zone 50 pendant son premier run et atteint la zone`,
+          `${contenu.mesures.zoneMaxAtteinte} : la fin de partie était donc franchie avant d'exister. EXG-28 dit « zone **dédiée** » —`,
+          `le boss final ne vit pas sur cette échelle. Ce que ce rapport livre à la place :`,
+          '',
+          '| constante | valeur | provenance |',
+          '| --- | --- | --- |',
+          `| \`zoneDediee\` | ${contenu.parametres.zoneBossFinal} | identifiant de la zone dédiée, hors de portée de la progression mesurée (zone max ${contenu.mesures.zoneMaxAtteinte}) — un nom, pas une profondeur |`,
+          `| \`profondeurEquivalente\` | ${contenu.parametres.bossFinalProfondeurEquivalente} | cherchée : profondeur dont la formule de zone donne les PV du boss |`,
+          `| \`multPv\` | ${contenu.parametres.bossFinalMultPv} | cherché : multiplicateur au-dessus de cette profondeur |`,
+          `| \`timerS\` | ${contenu.parametres.bossFinalTimerS} s | cherché : chrono du combat (EXG-16 appliqué au boss final) |`,
+          `| PV résultants | ${contenu.bossFinal.pvBoss.toExponential(3)} | \`pvBoss(${contenu.parametres.bossFinalProfondeurEquivalente}) × ${contenu.parametres.bossFinalMultPv}\` |`,
+          '',
+          '**Combat mesuré** (la politique tente le boss dès qu\'elle peut le gagner, ce qui donne le temps minimal) :',
+          '',
+          `- DPS soutenu au **départ** du dernier run (juste après la dernière Ascension, cycle d'Éclats effacé) : **${contenu.bossFinal.dpsDepartDernierRun.toExponential(2)}** → il faudrait ${(contenu.bossFinal.pvBoss / Math.max(contenu.bossFinal.dpsDepartDernierRun, 1)).toExponential(1)} s, soit très au-delà du chrono : **le combat n'est pas une formalité**.`,
+          `- DPS soutenu au moment où le combat devient gagnable : **${contenu.bossFinal.dpsAuMoment.toExponential(2)}**, à la zone ${contenu.bossFinal.zoneVictoire}.`,
+          `- **Durée du combat : ${contenu.bossFinal.dureeCombatS === null ? '—' : contenu.bossFinal.dureeCombatS.toFixed(1)} s sur un chrono de ${contenu.bossFinal.timerS} s** (${contenu.bossFinal.partDuChrono === null ? '—' : (contenu.bossFinal.partDuChrono * 100).toFixed(0)} % du temps imparti).`,
+          `- **Temps pour le battre : ${contenu.bossFinal.tempsAvantVictoireMs === null ? 'jamais' : (contenu.bossFinal.tempsAvantVictoireMs / H).toFixed(2) + ' h'}** après la dernière Ascension, sur un dernier run de ${(contenu.bossFinal.dureeDernierRunMs / H).toFixed(2)} h (${contenu.bossFinal.tempsAvantVictoireMs === null ? '—' : ((contenu.bossFinal.tempsAvantVictoireMs / contenu.bossFinal.dureeDernierRunMs) * 100).toFixed(0)} % du run : le point culminant).`,
+          `- Marge sous 1e300 : les PV du boss final valent ${contenu.bossFinal.pvBoss.toExponential(2)}, soit **${(300 - Math.log10(contenu.bossFinal.pvBoss)).toFixed(0)} décades** de marge (EXG-37).`,
+          '',
+        ]),
     '',
     '## 8. Marge à 1e300 (EXG-37)',
     '',

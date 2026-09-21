@@ -12,9 +12,16 @@
 //
 // Sorties : `src/donnees/constantes.ts` et `tools/idle-balance/rapports/<date>.md`.
 
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { controlerFidelite, type ResultatFidelite } from './fidelite.ts'
 import { construireConstantes, PARAMETRES_DEPART, type Parametres } from './parametres.ts'
-import { simulerPartie, type Mesures } from './simuler.ts'
+import {
+  evaluerBossFinal,
+  simulerPartie,
+  trajectoireDernierRun,
+  type Mesures,
+  type MesureBossFinal,
+} from './simuler.ts'
 import { verifier, type Rapport } from './contraintes.ts'
 import { ecrireConstantes, ecrireRapport, type LigneHistorique, type LigneSensibilite } from './sortie.ts'
 import { POLITIQUE_DEFAUT } from './joueur.ts'
@@ -42,13 +49,28 @@ const POIDS: Readonly<Record<string, number>> = {
   C10: 1,
   C11: 1.5,
   C12: 1,
+  C13: 2,
 }
+
+/**
+ * Pénalité de **franchissement** ajoutée à toute contrainte rouge, en plus de son écart gradué.
+ *
+ * Sans elle, la descente échange une contrainte tout juste ratée contre un gain marginal ailleurs : une
+ * contrainte §8 sont des critères d'échec, pas des objectifs à optimiser au prorata. Cas réel qui a
+ * motivé ce garde-fou — C07 (ADR-17, « aucun run sous 90 % du précédent ») ratée à 88,6 % ne pesait que
+ * `0,015 × 2 = 0,031` dans l'objectif, moins que ce que la descente gagnait sur les autres axes : elle a
+ * donc sciemment perdu une contrainte dure. Avec la barrière, passer au rouge coûte au moins le poids
+ * entier de la contrainte, ce qu'aucun gain marginal ne rembourse.
+ */
+const PENALITE_ECHEC = 1
 
 function cout(rapport: Rapport, seulement?: readonly string[]): number {
   let total = 0
   for (const verdict of rapport.verdicts) {
     if (seulement !== undefined && !seulement.includes(verdict.id)) continue
-    total += Math.abs(verdict.ecart) * (POIDS[verdict.id] ?? 1)
+    const poids = POIDS[verdict.id] ?? 1
+    total += Math.abs(verdict.ecart) * poids
+    if (!verdict.ok) total += PENALITE_ECHEC * poids
   }
   return total
 }
@@ -65,10 +87,22 @@ function mesurerRapide(p: Parametres): { mesures: Mesures; rapport: Rapport } {
   return { mesures, rapport: verifier(constantes, mesures) }
 }
 
+function bossDe(p: Parametres): { profondeurEquivalente: number; multPv: number; timerS: number } {
+  return {
+    profondeurEquivalente: p.bossFinalProfondeurEquivalente,
+    multPv: p.bossFinalMultPv,
+    timerS: p.bossFinalTimerS,
+  }
+}
+
 function mesurerComplet(p: Parametres): { mesures: Mesures; rapport: Rapport } {
   evaluations += 1
   const constantes = construireConstantes(p)
-  const mesures = simulerPartie(constantes, { maxTempsJeuMs: 300 * H, maxPas: 500_000 })
+  const mesures = simulerPartie(constantes, {
+    maxTempsJeuMs: 300 * H,
+    maxPas: 500_000,
+    bossFinal: bossDe(p),
+  })
   return { mesures, rapport: verifier(constantes, mesures) }
 }
 
@@ -224,6 +258,38 @@ function effetMesure(avantM: Mesures, apresM: Mesures): string {
   return parts.join(' · ')
 }
 
+/* ─────────────────────────────────────────────────────── points de départ de la descente */
+
+const DOSSIER_RAPPORTS = 'tools/idle-balance/rapports'
+
+/**
+ * Vecteurs archivés par les exécutions précédentes, relus comme **points de départ supplémentaires**.
+ *
+ * Pourquoi : une descente par coordonnées est locale et dépend de son point de départ. Sans ce
+ * mécanisme, une exécution peut livrer un vecteur *moins* bon que celui déjà archivé — c'est arrivé :
+ * une exécution a rendu C07 rouge à 88,6 % alors que le vecteur archivé la tenait à 91,0 %, parce
+ * qu'elle était repartie de zéro et avait convergé ailleurs. En repartant aussi des vecteurs archivés
+ * et en gardant le meilleur, la recherche devient **monotone d'une exécution à l'autre** : elle ne peut
+ * plus perdre de terrain.
+ *
+ * Un vecteur de départ est une **entrée** de la recherche, au même titre que `PARAMETRES_DEPART` ; les
+ * valeurs livrées restent des sorties, mesurées et tracées.
+ */
+function vecteursArchives(): { nom: string; parametres: Parametres }[] {
+  if (!existsSync(DOSSIER_RAPPORTS)) return []
+  const trouves: { nom: string; parametres: Parametres }[] = []
+  for (const fichier of readdirSync(DOSSIER_RAPPORTS).sort()) {
+    if (!fichier.endsWith('.vecteur.json')) continue
+    try {
+      const brut = JSON.parse(readFileSync(`${DOSSIER_RAPPORTS}/${fichier}`, 'utf8')) as Parametres
+      trouves.push({ nom: `vecteur archivé ${fichier.replace('.vecteur.json', '')}`, parametres: brut })
+    } catch {
+      console.log(`  (vecteur archivé illisible, ignoré : ${fichier})`)
+    }
+  }
+  return trouves
+}
+
 /* ────────────────────────────────────────────────────────────── passe de sensibilité */
 
 /**
@@ -262,6 +328,87 @@ function sensibilite(retenu: Parametres, budgetEvaluations: number, dejaVertes: 
     console.log(`  sensibilité · ${String(bouton.variable)} : vert pour [${verts.join(', ')}]`)
   }
   return lignes
+}
+
+/* ──────────────────────────────────────────────────────── boss final (EXG-28), une variable à la fois */
+
+const GRILLE_BOSS: readonly [keyof Parametres, readonly number[]][] = [
+  ['bossFinalTimerS', [30, 45, 60, 90, 120]],
+  ['bossFinalProfondeurEquivalente', [94, 96, 98, 99, 100, 101, 102, 103]],
+  ['bossFinalMultPv', [1, 2, 3, 5, 10]],
+]
+
+/**
+ * EXG-28 — cherche les constantes du boss final. Les PV et le chrono du boss n'influencent **rien**
+ * d'autre dans la partie : ce sont des sorties pures. On relève donc la trajectoire du dernier run une
+ * seule fois, puis on évalue la grille contre elle — la recherche devient quasi gratuite.
+ *
+ * Objectif, plus exigeant que la contrainte C13 qui ne fait que borner l'acceptable : viser le point
+ * culminant, c'est-à-dire un combat qui consomme 55 à 85 % du chrono et qui devient gagnable entre 70 et
+ * 90 % du dernier run. Trop tôt dans le run, le boss final n'est qu'une étape de plus ; trop tard, le
+ * joueur décroche avant de l'atteindre.
+ */
+function chercherBossFinal(
+  depart: Parametres,
+): { parametres: Parametres; historique: LigneHistorique[]; mesure: MesureBossFinal } {
+  const constantes = construireConstantes(depart)
+  const partie = simulerPartie(constantes, { maxTempsJeuMs: 300 * H, maxPas: 500_000 })
+  const trajectoire = trajectoireDernierRun(partie.etatFinal, constantes, POLITIQUE_DEFAUT)
+  const historique: LigneHistorique[] = []
+
+  const coutBoss = (p: Parametres): { cout: number; mesure: MesureBossFinal } => {
+    const mesure = evaluerBossFinal(constantes, bossDe(p), trajectoire)
+    if (mesure.gagneDesLeDepart || mesure.tempsAvantVictoireMs === null || mesure.dureeCombatS === null) {
+      return { cout: 100, mesure }
+    }
+    const partRun = mesure.dureeDernierRunMs <= 0 ? 0 : mesure.tempsAvantVictoireMs / mesure.dureeDernierRunMs
+    const partChrono = mesure.partDuChrono ?? 0
+    const ecart = (valeur: number, bas: number, haut: number): number =>
+      valeur < bas ? (bas - valeur) / bas : valeur > haut ? (valeur - haut) / haut : 0
+    return { cout: ecart(partChrono, 0.55, 0.85) + ecart(partRun, 0.7, 0.9), mesure }
+  }
+
+  let courant = depart
+  let etat = coutBoss(courant)
+  for (let passe = 1; passe <= 2; passe += 1) {
+    let bouge = false
+    for (const [variable, valeurs] of GRILLE_BOSS) {
+      const actuelle = lire(courant, variable)
+      let meilleure = actuelle
+      let meilleur = etat
+      for (const candidat of valeurs) {
+        if (candidat === actuelle) continue
+        const essai = coutBoss(avec(courant, variable, candidat))
+        if (essai.cout < meilleur.cout - 1e-9) {
+          meilleur = essai
+          meilleure = candidat
+        }
+      }
+      if (meilleure !== actuelle) {
+        historique.push({
+          phase: `boss final p${passe}`,
+          variable: String(variable),
+          avant: String(actuelle),
+          apres: String(meilleure),
+          coutAvant: etat.cout,
+          coutApres: meilleur.cout,
+          effet:
+            meilleur.mesure.dureeCombatS === null
+              ? 'boss jamais battu'
+              : `combat ${meilleur.mesure.dureeCombatS.toFixed(1)} s (${((meilleur.mesure.partDuChrono ?? 0) * 100).toFixed(0)} % du chrono) · gagnable à ${((meilleur.mesure.tempsAvantVictoireMs ?? 0) / Math.max(meilleur.mesure.dureeDernierRunMs, 1) * 100).toFixed(0)} % du dernier run`,
+        })
+        console.log(
+          `  boss final p${passe} · ${String(variable)} ${actuelle} → ${meilleure} · coût ${etat.cout.toFixed(3)} → ${meilleur.cout.toFixed(3)}`,
+        )
+        courant = avec(courant, variable, meilleure)
+        etat = meilleur
+        bouge = true
+      }
+    }
+    if (!bouge) break
+  }
+
+  return { parametres: courant, historique, mesure: etat.mesure }
 }
 
 /* ──────────────────────────────────────────────────────────────── mesures annexes */
@@ -414,27 +561,50 @@ function principal(): void {
   const budget = Number(process.env['EQUILIBRAGE_BUDGET'] ?? 900)
   console.log(`equilibrage:search — descente par coordonnées, une variable à la fois (budget ${budget} évaluations)`)
 
-  const depart = PARAMETRES_DEPART
-  const baseDepart = mesurerComplet(depart)
-  console.log(
-    `vecteur de départ : coût ${cout(baseDepart.rapport).toFixed(3)} · ${baseDepart.rapport.verdicts.filter((v) => !v.ok).length} contrainte(s) ratée(s)`,
-  )
+  // Descente multi-départ : les valeurs d'amorçage, plus tout vecteur archivé par une exécution
+  // précédente. On garde le meilleur résultat — la recherche ne peut donc pas régresser (cf.
+  // `vecteursArchives`).
+  const departs = [{ nom: "valeurs d'amorçage", parametres: PARAMETRES_DEPART }, ...vecteursArchives()]
+  const budgetParDepart = budget / departs.length
+  let meilleur: { nom: string; parametres: Parametres; cout: number; historique: LigneHistorique[] } | null =
+    null
 
-  console.log('— étage « rythme » (C01-C04, 1er run seulement)')
-  const rythme = descendre(depart, 'rythme', 3, budget * 0.2)
-  console.log('— étage « méta » (C01-C12, partie entière)')
-  const meta = descendre(rythme.parametres, 'meta', 3, budget * 0.25)
-  console.log('— étage « tout » (objectif complet C01-C12 sur toutes les variables)')
-  const tout = descendre(meta.parametres, 'tout', 3, budget * 0.4)
-  console.log('— passe de sensibilité')
+  for (const point of departs) {
+    const base = mesurerComplet(point.parametres)
+    console.log(
+      `— départ « ${point.nom} » : coût ${cout(base.rapport).toFixed(3)} · ${base.rapport.verdicts.filter((v) => !v.ok).length} contrainte(s) ratée(s)`,
+    )
+    const rythme = descendre(point.parametres, 'rythme', 3, budgetParDepart * 0.25)
+    const meta = descendre(rythme.parametres, 'meta', 3, budgetParDepart * 0.3)
+    const tout = descendre(meta.parametres, 'tout', 3, budgetParDepart * 0.45)
+    const final = mesurerComplet(tout.parametres)
+    const coutFinal = cout(final.rapport)
+    const rates = final.rapport.verdicts.filter((v) => !v.ok)
+    console.log(
+      `  → coût final ${coutFinal.toFixed(3)} · ${rates.length} ratée(s)${rates.length === 0 ? '' : ` [${rates.map((v) => v.id).join(', ')}]`}`,
+    )
+    if (meilleur === null || coutFinal < meilleur.cout) {
+      meilleur = {
+        nom: point.nom,
+        parametres: tout.parametres,
+        cout: coutFinal,
+        historique: [...rythme.historique, ...meta.historique, ...tout.historique],
+      }
+    }
+  }
+  const gagnant = meilleur!
+  console.log(`— meilleur départ retenu : « ${gagnant.nom} » (coût ${gagnant.cout.toFixed(3)})`)
 
-  const retenu = tout.parametres
+  console.log('— étage « boss final » (EXG-28, zone dédiée)')
+  const boss = chercherBossFinal(gagnant.parametres)
+
+  const retenu = boss.parametres
   const constantes = construireConstantes(retenu)
   const finale = mesurerComplet(retenu)
   const dejaVertes = finale.rapport.verdicts.filter((v) => v.ok).map((v) => v.id)
-  console.log('— diagnostic C07 (durée de run croissante)')
+  console.log('— diagnostic C07 (durée de run stable ou croissante à 10 % près)')
   const c07 = diagnostiquerC07(retenu)
-  const lignesSensibilite = sensibilite(retenu, budget * 0.2, dejaVertes)
+  const lignesSensibilite = sensibilite(retenu, budget * 0.12, dejaVertes)
 
   console.log('— contrôle de fidélité du pas adaptatif (pas de 100 ms contre pas adaptatif)')
   const fidelite: ResultatFidelite[] = [
@@ -470,7 +640,19 @@ function principal(): void {
       `${verdict.libelle} — mesuré ${verdict.mesure}, cible ${verdict.cible}. Analyse et designs alternatifs testés : ${cheminRapport} (section « Durée de run croissante »).`
   }
 
-  ecrireConstantes('src/donnees/constantes.ts', constantes, cheminRapport, date(), resume, nonTenues)
+  // Le vecteur retenu est archivé à côté du rapport : la prochaine exécution repartira aussi de lui,
+  // ce qui empêche une recherche de livrer moins bien que ce qui est déjà acquis.
+  writeFileSync(`${DOSSIER_RAPPORTS}/${date()}.vecteur.json`, `${JSON.stringify(retenu, null, 2)}\n`, 'utf8')
+
+  ecrireConstantes(
+    'src/donnees/constantes.ts',
+    constantes,
+    cheminRapport,
+    date(),
+    resume,
+    nonTenues,
+    bossDe(retenu),
+  )
   ecrireRapport(cheminRapport, {
     date: date(),
     parametres: retenu,
@@ -478,12 +660,13 @@ function principal(): void {
     mesures: finale.mesures,
     rapport: finale.rapport,
     fidelite,
-    historique: [...rythme.historique, ...meta.historique, ...tout.historique],
+    historique: [...gagnant.historique, ...boss.historique],
     sensibilite: lignesSensibilite,
     modeleOr: { parDegat: finale.mesures, auMeurtre },
     exg37: mesurerExg37(retenu, finale.mesures),
     horsLigne: mesurerHorsLigne(retenu, finale.mesures),
     diagnosticC07: c07.lignes,
+    bossFinal: finale.mesures.bossFinal,
     dureeSearchMs: Date.now() - t0,
     dureeCheckMs,
   })

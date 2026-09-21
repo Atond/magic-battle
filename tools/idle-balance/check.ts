@@ -14,27 +14,36 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import type { Constantes } from '../../src/domain/types.ts'
 import { tableau, verifier } from './contraintes.ts'
-import { simulerPartie } from './simuler.ts'
+import { simulerPartie, type OptionsSimulation } from './simuler.ts'
 
 const BUDGET_MS = 10_000
 const DEFAUT = 'src/donnees/constantes.ts'
 
 /** Charge un module de constantes : l'objet `Constantes` et les dérogations §8 qu'il documente. */
-async function chargerConstantes(
-  chemin: string,
-): Promise<{ constantes: Constantes; nonTenues: Readonly<Record<string, string>> }> {
+async function chargerConstantes(chemin: string): Promise<{
+  constantes: Constantes
+  nonTenues: Readonly<Record<string, string>>
+  bossFinal: OptionsSimulation['bossFinal']
+}> {
   const module = (await import(pathToFileURL(resolve(chemin)).href)) as Record<string, unknown>
   const candidat = module['CONSTANTES'] ?? module['default']
   if (candidat === undefined || typeof candidat !== 'object' || candidat === null) {
     throw new Error(`\`${chemin}\` n'exporte ni \`CONSTANTES\` ni export par défaut exploitable.`)
   }
   const nonTenues = module['CONTRAINTES_NON_TENUES']
+  // EXG-28 — les constantes de la zone dédiée du boss final sont exportées à côté de `CONSTANTES` :
+  // le type `ConstantesFin` ne les porte pas encore (T-13). Absentes, la contrainte C13 échoue.
+  const boss = module['BOSS_FINAL']
   return {
     constantes: candidat as Constantes,
     nonTenues:
       typeof nonTenues === 'object' && nonTenues !== null
         ? (nonTenues as Readonly<Record<string, string>>)
         : {},
+    bossFinal:
+      typeof boss === 'object' && boss !== null
+        ? (boss as OptionsSimulation['bossFinal'])
+        : undefined,
   }
 }
 
@@ -44,16 +53,18 @@ async function principal(): Promise<number> {
 
   let constantes: Constantes
   let nonTenues: Readonly<Record<string, string>>
+  let bossFinal: OptionsSimulation['bossFinal']
   try {
     const charge = await chargerConstantes(chemin)
     constantes = charge.constantes
     nonTenues = charge.nonTenues
+    bossFinal = charge.bossFinal
   } catch (erreur) {
     console.error(`equilibrage:check — impossible de charger les constantes : ${String(erreur)}`)
     return 1
   }
 
-  const mesures = simulerPartie(constantes)
+  const mesures = simulerPartie(constantes, { bossFinal })
   const rapport = verifier(constantes, mesures)
   const duree = Date.now() - debut
 

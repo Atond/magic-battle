@@ -28,3 +28,16 @@
   de CI à supprimer. Le compteur d'itérations reste utile pour documenter l'intention, jamais comme preuve.
   Corollaire de méthode : la seule façon de savoir qu'un garde-fou détecte quelque chose est d'y injecter
   la régression qu'il doit voir, de constater le rouge, puis de la retirer (`git diff` vide).
+
+## LRN-003 — Un critère d'échec se pénalise au poids entier, pas au prorata de l'écart ; et une descente sans mémoire retrouve son optimum local (2026-09-21)
+- **Issu de :** [[BLK-003]]
+- **Ce qu'on retient :** dans une recherche de constantes, il y a deux natures de critères et les
+  confondre coûte cher. Un **objectif** se mesure au prorata (plus près, mieux c'est). Un **critère
+  d'échec** de spec est binaire : le rater doit coûter au moins le poids entier de la contrainte, sinon
+  l'optimiseur le vend au premier gain trouvé ailleurs — et il le vendra, silencieusement, en laissant le
+  vérificateur constater la perte sans jamais l'empêcher. Deuxième moitié de la leçon : une descente par
+  coordonnées repartant toujours des mêmes valeurs d'amorçage retombe dans le même optimum local. Faire
+  **archiver le vecteur retenu** et le relire comme point de départ supplémentaire rend la recherche
+  monotone d'une exécution à l'autre — une passe ne peut plus rendre le jeu moins bon qu'il ne l'était.
+- **Corollaire de méthode :** quand une contrainte régresse après une passe de recherche, la question
+  n'est pas « quelle constante a bougé » mais « comment cette contrainte était-elle pesée ».

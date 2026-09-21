@@ -123,6 +123,8 @@ export interface Mesures {
   /** Or qui correspond à des PV réellement détruits. */
   orUtile: number
   arret: 'objectif' | 'budgetTemps' | 'budgetPas' | 'bloque'
+  /** EXG-28 — mesure du combat final, `null` si `options.bossFinal` n'a pas été fourni. */
+  bossFinal: MesureBossFinal | null
   etatFinal: EtatJeu
 }
 
@@ -141,6 +143,13 @@ export interface OptionsSimulation {
   dureeRunMaxMs?: number
   /** Modèle d'or « au meurtre » : l'or ne suit plus les dégâts infligés mais les PV détruits. */
   orAuMeurtre?: boolean
+  /**
+   * EXG-28 — constantes de la zone dédiée du boss final. Fournies par l'appelant et non lues dans
+   * `Constantes` : le type `ConstantesFin` de `src/domain/types.ts` ne porte pas encore ces champs, et
+   * ce lot n'a pas le droit d'y toucher (c'est T-13). `src/donnees/constantes.ts` les exporte à côté.
+   * Absentes, la mesure du boss final vaut `null` et la contrainte correspondante échoue.
+   */
+  bossFinal?: { profondeurEquivalente: number; multPv: number; timerS: number }
   /**
    * Force le pas de 100 ms du moteur (EXG-1) au lieu du pas adaptatif : c'est le jeu tel qu'il tourne
    * vraiment. Beaucoup plus lent (quelques millions de ticks sur une partie entière), donc réservé à la
@@ -546,7 +555,23 @@ export function simulerPartie(constantes: Constantes, options: OptionsSimulation
   }
   const premier = murs.find((mur) => mur.dureeMs >= seuilMurMs) ?? null
 
-  const maxValeurJeu = Math.max(maxDps, maxOr, maxPvCible, maxEclatsPossedes, maxPointsAscension, maxChaineMult)
+  // EXG-28 — le combat final se joue pendant le run qui suit la dernière Ascension requise. On relève
+  // la trajectoire de ce run une fois (≈ 0,1 s) puis on évalue le boss contre elle.
+  let bossFinal: MesureBossFinal | null = null
+  if (options.bossFinal !== undefined && arret === 'objectif') {
+    const trajectoire = trajectoireDernierRun(etat, constantesMoteur, politique)
+    bossFinal = evaluerBossFinal(constantesMoteur, options.bossFinal, trajectoire)
+  }
+
+  const maxValeurJeu = Math.max(
+    maxDps,
+    maxOr,
+    maxPvCible,
+    maxEclatsPossedes,
+    maxPointsAscension,
+    maxChaineMult,
+    bossFinal === null ? 0 : bossFinal.pvBoss,
+  )
 
   return {
     premierSortMs,
@@ -579,7 +604,186 @@ export function simulerPartie(constantes: Constantes, options: OptionsSimulation
     orGaspille,
     orUtile: orCredite,
     arret,
+    bossFinal,
     etatFinal: etat,
+  }
+}
+
+/* ────────────────────────────────────────────────────── boss final (EXG-28), zone dédiée */
+
+export interface MesureBossFinal {
+  /** PV du boss final : `pvBoss(profondeurEquivalente) × multPv`. */
+  pvBoss: number
+  /** DPS soutenu au départ du dernier run (juste après la dernière Ascension : le cycle est effacé). */
+  dpsDepartDernierRun: number
+  /** DPS soutenu maximal atteint pendant le dernier run. */
+  dpsMaxDernierRun: number
+  /** DPS soutenu au moment où le boss devient tuable dans le chrono. */
+  dpsAuMoment: number
+  /** Temps écoulé depuis la dernière Ascension avant que le combat devienne gagnable. */
+  tempsAvantVictoireMs: number | null
+  /** Durée totale du dernier run mesuré. */
+  dureeDernierRunMs: number
+  /** Durée du combat lui-même, en secondes (`PV / DPS_soutenu`). */
+  dureeCombatS: number | null
+  /** Le boss est-il déjà tuable dès le départ du dernier run ? (= formalité, à éviter) */
+  gagneDesLeDepart: boolean
+  /** Fraction du chrono consommée par le combat quand il devient gagnable. */
+  partDuChrono: number | null
+  /** Zone où le joueur en est quand le combat devient gagnable. */
+  zoneVictoire: number | null
+  timerS: number
+}
+
+/**
+ * Dégâts par seconde **soutenus** : production passive (EXG-9) plus la cadence moyenne des sorts actifs
+ * lancés dès la fin de leur cooldown (EXG-12), qui est ce que la politique tient réellement. C'est le
+ * bon taux pour un combat chronométré de plusieurs dizaines de secondes, où les sorts partent plusieurs
+ * fois — la production passive seule sous-estimerait le joueur.
+ */
+export function degatsSoutenusParSeconde(etat: EtatJeu, constantes: Constantes): number {
+  const passif = degatsParSeconde(etat, constantes)
+  const multAchats = multiplicateursAchats(etat, constantes)
+  const facteur = facteurCooldownArbres(etat, constantes)
+  let sorts = 0
+  for (const parametres of constantes.sorts) {
+    if (!sortDisponible(etat, parametres.id, constantes)) continue
+    const cooldownS = (parametres.cooldownMs * facteur) / 1_000
+    if (!(cooldownS > 0)) continue
+    sorts += (parametres.degatsBase * multAchats) / cooldownS
+  }
+  return passif + sorts
+}
+
+/** Un relevé de la trajectoire du dernier run : instant et dégâts soutenus disponibles. */
+export interface PointTrajectoire {
+  tMs: number
+  dpsSoutenu: number
+  zone: number
+}
+
+/**
+ * EXG-28 — rejoue le **dernier run** (celui qui suit la dernière Ascension requise) et relève la
+ * trajectoire des dégâts soutenus. Cette trajectoire ne dépend pas des constantes du boss final : on la
+ * mesure **une fois**, puis on évalue autant de couples (profondeur, multiplicateur, chrono) qu'on veut
+ * contre elle, ce qui rend la recherche du boss final quasi gratuite.
+ *
+ * Le run se joue avec la même politique que les autres, mais sans prestiger : on veut savoir jusqu'où
+ * le joueur monte avant que sa patience ne s'épuise.
+ */
+export function trajectoireDernierRun(
+  etatDepart: EtatJeu,
+  constantes: Constantes,
+  politique: Politique = POLITIQUE_DEFAUT,
+): readonly PointTrajectoire[] {
+  const constantesFermees: Constantes = { ...constantes, tick: { nTicksMax: 0 } }
+  const constantesSansAutoCast: Constantes = { ...constantes, sorts: [] }
+  let etat = etatDepart
+  const depart = etat.tempsJeuMs
+  const points: PointTrajectoire[] = []
+  let derniereZone = etat.combat.zone
+  let derniereZoneMs = etat.tempsJeuMs
+  let prochainClicMs = etat.tempsJeuMs
+  let pas = 0
+
+  while (pas < 400_000) {
+    etat = acheterAuMieux(etat, constantes, politique).etat
+    etat = lancerSortsPrets(etat, constantes).etat
+    if (cliqueEncore(etat, constantes, politique)) {
+      const intervalle = 1_000 / politique.clicsParSeconde
+      let dus = 0
+      while (etat.tempsJeuMs >= prochainClicMs && dus < 10_000) {
+        prochainClicMs += intervalle
+        dus += 1
+      }
+      if (dus > 0) etat = cliquer(etat, constantes, dus)
+    } else {
+      prochainClicMs = etat.tempsJeuMs
+    }
+
+    points.push({
+      tMs: etat.tempsJeuMs - depart,
+      dpsSoutenu: degatsSoutenusParSeconde(etat, constantes),
+      zone: etat.combat.zone,
+    })
+
+    if (etat.combat.zone > derniereZone) {
+      derniereZone = etat.combat.zone
+      derniereZoneMs = etat.tempsJeuMs
+    }
+    // Le joueur qui ne progresse plus ne gagnera pas non plus le combat final : le run s'arrête là.
+    if (etat.tempsJeuMs - derniereZoneMs >= politique.patienceMs) break
+
+    const dps = degatsParSeconde(etat, constantes)
+    const echeances = [
+      delaiProchainCombatMs(etat, constantes, dps),
+      delaiProchainSortMs(etat, constantes),
+      delaiProchainAchatMs(etat, constantes, tauxOrParSeconde(etat, constantes, politique, false), politique),
+      60_000,
+    ]
+    let delai = Number.POSITIVE_INFINITY
+    for (const e of echeances) if (Number.isFinite(e) && e >= 0 && e < delai) delai = e
+    if (!Number.isFinite(delai)) break
+    etat = pasDeJeu(
+      etat,
+      Math.max(1, Math.ceil(delai / PAS_TICK_MS)),
+      constantes,
+      constantesFermees,
+      constantesSansAutoCast,
+    )
+    pas += 1
+  }
+
+  return points
+}
+
+/**
+ * EXG-28 — évalue un jeu de constantes de boss final contre la trajectoire du dernier run. Le combat
+ * suit la règle des boss du moteur (EXG-16) : le joueur gagne si ses dégâts soutenus viennent à bout des
+ * PV dans le chrono, donc dès que `PV / DPS_soutenu ≤ chrono`.
+ *
+ * Les PV sont exprimés sur la formule de zone du moteur pour rester cohérents avec `pvBaseVague1` et
+ * `multBoss` : `PV = pvBoss(profondeurEquivalente) × multPv`. Aucune formule n'est réécrite ici.
+ */
+export function evaluerBossFinal(
+  constantes: Constantes,
+  parametres: { profondeurEquivalente: number; multPv: number; timerS: number },
+  trajectoire: readonly PointTrajectoire[],
+): MesureBossFinal {
+  const pv = pvBoss(parametres.profondeurEquivalente, constantes) * parametres.multPv
+  const premier = trajectoire[0]
+  const dpsDepart = premier === undefined ? 0 : premier.dpsSoutenu
+  const gagneDesLeDepart = dpsDepart > 0 && pv / dpsDepart <= parametres.timerS
+
+  let tempsAvantVictoireMs: number | null = null
+  let dpsAuMoment = dpsDepart
+  let dureeCombatS: number | null = null
+  let zoneVictoire: number | null = null
+  for (const point of trajectoire) {
+    if (!(point.dpsSoutenu > 0)) continue
+    const duree = pv / point.dpsSoutenu
+    if (duree <= parametres.timerS) {
+      tempsAvantVictoireMs = point.tMs
+      dpsAuMoment = point.dpsSoutenu
+      dureeCombatS = duree
+      zoneVictoire = point.zone
+      break
+    }
+  }
+
+  const dernier = trajectoire[trajectoire.length - 1]
+  return {
+    pvBoss: pv,
+    dpsDepartDernierRun: dpsDepart,
+    dpsMaxDernierRun: dernier === undefined ? 0 : Math.max(...trajectoire.map((t) => t.dpsSoutenu)),
+    dpsAuMoment,
+    tempsAvantVictoireMs,
+    dureeDernierRunMs: dernier === undefined ? 0 : dernier.tMs,
+    dureeCombatS,
+    gagneDesLeDepart,
+    partDuChrono: dureeCombatS === null ? null : dureeCombatS / parametres.timerS,
+    zoneVictoire,
+    timerS: parametres.timerS,
   }
 }
 

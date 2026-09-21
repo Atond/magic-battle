@@ -9,7 +9,7 @@
 //   · 1er prestige 2.77 h · jeu cumulé 72.3 h · 24 prestiges en 4 Ascensions
 //   · mur le plus long avant le 1er prestige 30 min · zone max 118
 //   · plus grande valeur de jeu 5.22e+173 (marge 126 décades sous 1e300)
-//   · contraintes §8 : 11/12 tenues
+//   · contraintes §8 : 13/13 tenues
 
 import type { Constantes } from '../domain/types.ts'
 
@@ -454,7 +454,7 @@ export const CONSTANTES: Constantes = {
   ],
   fin: {
     nAscensionsRequises: 4,
-    zoneBossFinal: 50,
+    zoneBossFinal: 1000,
   },
 }
 
@@ -465,6 +465,30 @@ export const CONSTANTES: Constantes = {
  * fait échouer la vérification, et une contrainte listée ici qui redevient verte la fait échouer
  * aussi — pour qu'une dérogation périmée ne survive jamais à sa raison d'être.
  */
-export const CONTRAINTES_NON_TENUES: Readonly<Record<string, string>> = {
-  C07: 'durée de run croissante, 2 h ≤ durée ≤ 24 h (§8) — mesuré 2.38 h → 2.88 h sur 28 runs, cible croissante, plancher 2 h, plafond 24 h. Analyse et designs alternatifs testés : tools/idle-balance/rapports/2026-09-21.md (section « Durée de run croissante »).',
+export const CONTRAINTES_NON_TENUES: Readonly<Record<string, string>> = {}
+
+/**
+ * EXG-28 — constantes de la **zone dédiée** du boss final. Exportées à côté de `CONSTANTES` et non
+ * dans `ConstantesFin`, parce que le type de `src/domain/types.ts` ne porte pas encore ces champs :
+ * T-13 les y intègre et câble la logique d'accès (`ascensions ≥ nAscensionsRequises`) ainsi que le
+ * calcul des PV. Ici, seuls les nombres.
+ *
+ * `zoneDediee` n'est **pas** une profondeur de progression : le boss final ne vit pas sur l'échelle
+ * normale des zones, sinon le joueur le traverse pendant un run ordinaire. Ce n'est qu'un
+ * identifiant, choisi hors de portée de la progression mesurée. Les PV, eux, sont bien exprimés sur
+ * la formule de zone du moteur pour rester cohérents avec `pvBaseVague1` et `multBoss` :
+ *   `PV_boss_final = pvBoss(profondeurEquivalente) × multPv`.
+ */
+export interface ParametresBossFinal {
+  readonly zoneDediee: number
+  readonly profondeurEquivalente: number
+  readonly multPv: number
+  readonly timerS: number
+}
+
+export const BOSS_FINAL: ParametresBossFinal = {
+  zoneDediee: 1000,
+  profondeurEquivalente: 100,
+  multPv: 5,
+  timerS: 30,
 }

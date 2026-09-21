@@ -27,3 +27,20 @@
   tard, qui n'incrémenterait rien, aurait laissé le test vert pendant que le tick partait en O(monstres).
 - **Résolution :** doubler l'intention (compteur) par une détection qui ne dépend pas de la coopération de
   l'auteur — un budget de dégâts astronomique sous timeout serré. → [[LRN-002]]
+
+## BLK-003 — une contrainte §8 sacrifiée par la recherche qui la pondérait au prorata — Résolu (2026-09-21)
+- **Contexte :** T-14. Après amendement d'ADR-17, une seconde passe de `equilibrage:search` a produit un
+  jeu de constantes meilleur sur d'autres critères mais dont le pire rapport d'un run au suivant tombe à
+  **88,6 %**, sous le seuil de 90 % — alors que le jeu de constantes précédent tenait ce seuil.
+- **Cause :** C07 n'était pas dans la fonction objectif de la recherche. Une contrainte qu'on vérifie
+  après coup mais qu'on n'optimise pas est une contrainte qu'une passe ultérieure peut sacrifier sans que
+  rien ne l'en empêche — le vérificateur la voit partir, il ne la retient pas.
+- **Cause réelle, plus fine que le diagnostic initial :** C07 **était** dans la fonction objectif,
+  pondérée 2, mais au **prorata de l'écart** — ratée à 88,6 %, elle coûtait 0,031, moins que ce que la
+  descente gagnait ailleurs. Et même une fois la barrière posée, repartir des seules valeurs d'amorçage
+  converge à 88,9 % : c'est aussi un **optimum local**.
+- **Résolution :** deux corrections dans `search.ts` — une pénalité au **poids entier** dès qu'une
+  contrainte est rouge (une contrainte §8 est un critère d'échec, pas un objectif au prorata), et une
+  descente **multi-départ** qui relit les vecteurs archivés, ce qui rend la recherche monotone d'une
+  exécution à l'autre. Résultat : 13/13, C07 à 91,0 %, zéro dérogation. Le seuil de 90 % n'a pas
+  bougé. → [[LRN-003]]
