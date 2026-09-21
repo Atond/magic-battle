@@ -17,4 +17,6 @@
 ## EVAL-003 — Porte de qualité (2026-09-20)
 - **Mesure :** `bash scripts/verify.sh` vert (pureté domain/, aucune graine dans src/, typecheck, lint, test,
   equilibrage:check, build).
-- **Valeur actuelle :** vert sur dépôt vide (étapes npm ignorées tant que package.json n'existe pas).
+- **Valeur actuelle (2026-09-21, lot A vague 1) :** vert — pureté OK, aucune valeur d'amorçage dans src/,
+  typecheck OK, lint OK, 43 tests / 4 fichiers, build OK ; `equilibrage:check` encore ignoré (script npm
+  absent jusqu'à T-14).

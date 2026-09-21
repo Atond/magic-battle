@@ -38,20 +38,42 @@ export type MonnaieAchat = 'or' | 'renommee'
 /** §4.2 — jalon qui accomplit une quête (EXG-54) : zone atteinte, monstres tués, ou 1er prestige. */
 export type TypeJalonQuete = 'zoneAtteinte' | 'monstresTues' | 'premierPrestige'
 
+/**
+ * Motif d'un refus du moteur. Un refus ne modifie **jamais** l'état : l'appelant reçoit l'état d'entrée
+ * tel quel et ce motif, à afficher par l'UI (T-19, T-20). Aucune exception n'est levée : le domaine
+ * renvoie des valeurs, jamais des `throw` (le tick ne doit pas pouvoir casser sur une action refusée).
+ */
+export type MotifRefus =
+  /** Identifiant absent du contenu (`Constantes`). */
+  | 'inconnu'
+  /** EXG-7 / EXG-14 / EXG-41 — brique pas encore débloquée (école, sort, 6e école). */
+  | 'verrouille'
+  /** Solde insuffisant dans la monnaie **attendue** par l'achat. */
+  | 'monnaieInsuffisante'
+  /** EXG-10 — monnaie proposée différente de celle exigée (l'or ne se substitue pas à la Renommée). */
+  | 'mauvaiseMonnaie'
+  /** Palier maximal de l'achat déjà atteint. */
+  | 'paliersMaxAtteints'
+  /** Quantité demandée non finie, nulle ou négative. */
+  | 'quantiteInvalide'
+  /** EXG-12 — sort encore en cooldown. */
+  | 'enCooldown'
+
 /* ═══════════════════════════════════════════════════════════════════════════ contenu (src/donnees) */
 // Descripteurs de contenu : textes et relations. Les nombres associés vivent dans `Constantes`.
 
-/** §5 — une école de magie : générateur passif, débloque un sort actif. Textes écrits en T-24. */
+/**
+ * §5 — une école de magie : générateur passif, débloque un sort actif. Textes écrits en T-24.
+ * Ce descripteur ne porte que du **texte** : la zone de révélation (EXG-8) et le verrou d'Ascension
+ * (EXG-41) sont des valeurs de progression, donc des sorties du simulateur — elles vivent dans
+ * `ParametresEcole` (contrat `Constantes`), seule source de vérité lue par le moteur.
+ */
 export interface Ecole {
   readonly id: IdEcole
   readonly nom: string
   readonly description: string
   /** §5 « une École débloque un Sort ». */
   readonly idSort: string
-  /** EXG-8 — numéro de zone dont le boss révèle cette école ; `null` pour l'école de départ. */
-  readonly zoneRevelation: number | null
-  /** EXG-41 — vrai pour Lumière : visible seulement après la 1re Ascension. */
-  readonly requiertAscension: boolean
 }
 
 /** §5 / §4.3 — un sort actif : dégâts instantanés puis cooldown (EXG-12), lié à une école. */
@@ -77,7 +99,11 @@ export interface Vague {
   readonly pvMonstre: number
 }
 
-/** §5 — un monstre en combat. Ses PV viennent de la vague, son or de `Or = PV × or_par_dégât_moyen × mult_or_zone` (EXG-6). */
+/**
+ * §5 — un monstre en combat. Ses PV viennent de la vague, son or de
+ * `Or = PV × or_par_dégât_moyen × mult_or_zone` (EXG-6). `nom` est du **contenu** : le moteur crée les
+ * monstres avec un nom vide, `src/donnees/zones.ts` (T-25) les baptise par zone.
+ */
 export interface Monstre {
   readonly nom: string
   readonly pvMax: number
@@ -88,11 +114,13 @@ export interface Monstre {
 /** §5 / EXG-16 — un boss : monstre chronométré ; l'échec renvoie à la vague précédente (EXG-17). */
 export interface Boss extends Monstre {
   readonly zone: number
-  /** EXG-16 — durée du combat, en millisecondes, décomptée par le tick. */
-  readonly timerRestantMs: number
+  /** Marqueur de type : distingue un boss d'un monstre de vague sans tester un champ facultatif. */
+  readonly estBoss: true
   /** EXG-44 — vrai pour le boss final de la zone dédiée de fin de partie (EXG-28). */
   readonly estFinal: boolean
 }
+// EXG-16 — le temps restant du combat de boss est porté par `EtatCombat.timerBossRestantMs` seul :
+// une seule source de vérité pour une seule valeur (le boss lui-même ne duplique pas son chrono).
 
 /** §5 — une quête (succès fusionnés, §3.2) : accomplie une seule fois sur jalon, crédite de la Renommée (EXG-54). */
 export interface Quete {
@@ -254,12 +282,63 @@ export interface EtatJeu {
    * les tests de coût, à la place d'un chronomètre.
    */
   readonly ticksRattrapes: number
+  /**
+   * EXG-30 — compteur d'itérations de la **résolution de combat**, cumulé (pendant de `ticksRattrapes`
+   * pour les vagues). Chaque avancement de combat en ajoute un nombre borné, indépendant du DPS : les
+   * vagues nettoyées d'un coup se résolvent en forme fermée (série géométrique), jamais monstre par
+   * monstre. C'est ce compteur que mesurent les tests de coût, à la place d'un chronomètre.
+   */
+  readonly iterationsCombat: number
   /** EXG-2 — reste de delta-time sous `PAS_TICK_MS`, conservé d'une frame à l'autre (jamais perdu). */
   readonly resteDeltaMs: number
   /** EXG-49 — horodatage (ms epoch) de la dernière sauvegarde, base du calcul hors-ligne. */
   readonly derniereSauvegardeMs: number
   /** Temps crédité hors-ligne, cumulé, en ms (statistique : n'entre pas dans la cible « ≥ 40 h » de §8). */
   readonly tempsHorsLigneMs: number
+}
+
+/* ════════════════════════════════════════════════════════════ résultats d'action (retours du moteur) */
+// Toute action du joueur (achat, déclenchement de sort) renvoie le NOUVEL état plus un verdict : rien
+// n'est jamais muté, et un refus est une valeur de retour, pas une exception.
+
+/** EXG-8 / EXG-9 / EXG-42 / EXG-43 — verdict d'un achat (niveau d'école, palier d'amélioration/équipement). */
+export interface ResultatAchat {
+  /** Nouvel état ; **strictement égal** à l'état d'entrée en cas de refus (aucun effet de bord). */
+  readonly etat: EtatJeu
+  readonly accepte: boolean
+  readonly motifRefus: MotifRefus | null
+  /** Montant réellement débité (0 en cas de refus). */
+  readonly coutPaye: number
+  /** Nombre de niveaux/paliers réellement achetés (0 en cas de refus). */
+  readonly quantite: number
+}
+
+/** EXG-11 / EXG-12 — verdict d'un déclenchement de sort actif ou du sort de clic. */
+export interface ResultatDeclenchement {
+  readonly etat: EtatJeu
+  readonly declenche: boolean
+  readonly motifRefus: MotifRefus | null
+  /** Dégâts instantanés produits (0 si refusé) ; consommés par la résolution de combat. */
+  readonly degats: number
+}
+
+/**
+ * EXG-15 à 17 / EXG-30 — résultat d'un pas de combat : le nouveau combat plus ce qui vient de se passer.
+ * L'appelant (le tick) en tire les conséquences hors combat : compteur de monstres tués, révélation
+ * d'école par boss vaincu (EXG-8), jalons de quête (EXG-54).
+ */
+export interface AvancementCombat {
+  readonly combat: EtatCombat
+  /** Monstres (et boss) tombés pendant ce pas ; peut valoir plusieurs vagues d'un coup (forme fermée). */
+  readonly monstresTues: number
+  readonly vaguesNettoyees: number
+  readonly bossVaincu: boolean
+  /** EXG-17 — le chrono a expiré avant la mort du boss. */
+  readonly bossEchoue: boolean
+  /** EXG-8 — numéro de zone dont le boss vient de tomber ; `null` sinon. */
+  readonly zoneVaincue: number | null
+  /** EXG-30 — étapes de résolution consommées : indépendant du DPS et de la profondeur atteinte. */
+  readonly iterations: number
 }
 
 /** §4.7 — enveloppe persistée : état sérialisé + version de schéma (EXG-24, EXG-25, EXG-26). */
@@ -301,6 +380,38 @@ export interface ParametresEcole {
   readonly paliersSeuils: readonly number[]
   /** §8 — multiplicateur appliqué à chaque seuil franchi (interview : ×2). */
   readonly multiplicateurParPalier: number
+  /**
+   * EXG-8 — numéro de zone dont le boss révèle cette école ; `null` = disponible dès le départ
+   * (École du Feu, EXG-9). Le moteur lit cette valeur : aucun `if` sur un identifiant d'école.
+   */
+  readonly zoneRevelation: number | null
+  /** EXG-41 — vrai pour la 6e école (Lumière) : hors du circuit avant la 1re Ascension. */
+  readonly requiertAscension: boolean
+}
+
+/** EXG-11 à 14 — contrat numérique d'un sort actif (§4.3). */
+export interface ParametresSort {
+  readonly id: string
+  /** §5 « une École débloque un Sort » : le sort suit le déblocage de son école (EXG-7). */
+  readonly idEcole: IdEcole
+  /** EXG-13 — touche 1 à 6 ; la 6 ne répond qu'après la 1re Ascension. */
+  readonly touche: ToucheSort
+  /** Dégâts instantanés du sort, avant la chaîne des multiplicateurs d'achats (§8). */
+  readonly degatsBase: number
+  /** EXG-12 — durée du cooldown en millisecondes. */
+  readonly cooldownMs: number
+}
+
+/** EXG-10 / EXG-54 — contrat numérique d'une quête (les succès sont des quêtes, ADR-11). */
+export interface ParametresQuete {
+  readonly id: string
+  /** Libellé de travail ; le texte définitif est du contenu (`Quete.nom`, T-26). */
+  readonly libelle: string
+  readonly typeJalon: TypeJalonQuete
+  /** Valeur du jalon (numéro de zone, nombre de monstres) ; ignorée pour `premierPrestige`. */
+  readonly seuil: number
+  /** EXG-10 — Renommée créditée une seule fois, dépensable uniquement en équipement. */
+  readonly renommeeGagnee: number
 }
 
 /** §8 — zones générées par une formule paramétrique sans borne : aucun nombre de zones fixé a priori. */
@@ -384,8 +495,12 @@ export interface Constantes {
   readonly tick: ConstantesTick
   readonly horsLigne: ConstantesHorsLigne
   readonly ecoles: Readonly<Record<IdEcole, ParametresEcole>>
+  /** §4.3 — un descripteur par sort actif (6 touches, EXG-13). */
+  readonly sorts: readonly ParametresSort[]
   readonly zones: ConstantesZones
   readonly or: ConstantesOr
+  /** EXG-54 — liste des quêtes (succès inclus, ADR-11). */
+  readonly quetes: readonly ParametresQuete[]
   readonly prestige: ConstantesPrestige
   readonly ascension: ConstantesAscension
   readonly ameliorations: readonly ParametresAchatMultiplicatif[]

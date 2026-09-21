@@ -16,14 +16,19 @@ import {
   VERSION_SCHEMA,
   ZONE_DEPART,
 } from './constantes-moteur.ts'
+import { multAmeliorations, multEquipement, multiplicateursAchats } from './ameliorations/index.ts'
+import { productionEcoles, revelerEcolesDeZone } from './ecoles/index.ts'
+import { evaluerQuetes } from './quetes/index.ts'
+import { avancerSorts, declencherSort, degatsClic } from './sorts/index.ts'
 import type {
+  AvancementCombat,
   Constantes,
   EtatEcole,
   EtatJeu,
-  IdEcole,
-  ParametresEcole,
+  ResultatDeclenchement,
   ResumeHorsLigne,
 } from './types.ts'
+import { avancerCombat, orPourDegats } from './zones/index.ts'
 
 /* ────────────────────────────────────────────────────────────────────────── état initial */
 
@@ -75,6 +80,7 @@ export function etatInitial(horodatageMs: number): EtatJeu {
     tempsJeuMs: 0,
     ticksEcoules: 0,
     ticksRattrapes: 0,
+    iterationsCombat: 0,
     resteDeltaMs: 0,
     derniereSauvegardeMs: horodatageMs,
     tempsHorsLigneMs: 0,
@@ -83,49 +89,32 @@ export function etatInitial(horodatageMs: number): EtatJeu {
 
 /* ──────────────────────────────────────────────────────────── chaîne de dégâts (§8) */
 
-/** §8 — ×`multiplicateurParPalier` à chaque seuil de `paliersSeuils` franchi. Coût borné par le nombre de seuils. */
-function multiplicateurPalier(niveau: number, parametres: ParametresEcole): number {
-  let paliersFranchis = 0
-  for (const seuil of parametres.paliersSeuils) {
-    if (niveau >= seuil) paliersFranchis += 1
-  }
-  return parametres.multiplicateurParPalier ** paliersFranchis
-}
-
 /**
  * §8 — production passive totale, en dégâts par seconde :
- * `Σ(niveau_école × production_base × palier_école)`. La somme parcourt les écoles présentes dans
- * l'état, jamais une liste en dur ; une école non débloquée ne compte pas (EXG-7).
+ * `Σ(niveau_école × production_base × palier_école)`. La formule et les paliers vivent dans
+ * `ecoles/` (T-3), source unique : le moteur ne fait que l'appeler (EXG-7 y est tenu).
  */
 export function productionPassive(etat: EtatJeu, constantes: Constantes): number {
-  let production = 0
-  for (const [id, ecole] of Object.entries(etat.ecoles) as [IdEcole, EtatEcole][]) {
-    if (!ecole.debloquee || ecole.niveau <= 0) continue
-    const parametres = constantes.ecoles[id]
-    if (parametres === undefined) continue
-    production += ecole.niveau * parametres.productionBase * multiplicateurPalier(ecole.niveau, parametres)
-  }
-  return production
+  return productionEcoles(etat, constantes)
 }
 
 /**
- * §8 — chaîne complète des multiplicateurs de dégâts. Les facteurs des briques pas encore implémentées
- * valent `FACTEUR_NEUTRE` (= 1, propriété du produit, pas une valeur d'équilibrage) :
- *  - `mult_améliorations` (EXG-42) et `mult_équipement` (EXG-43) → branchés en T-8 ;
+ * §8 — chaîne complète des multiplicateurs de dégâts. Les deux facteurs d'achats sont branchés (T-8) ;
+ * les facteurs de méta pas encore implémentés valent `FACTEUR_NEUTRE` (= 1, propriété du produit, pas
+ * une valeur d'équilibrage) :
+ *  - `mult_améliorations` (EXG-42) et `mult_équipement` (EXG-43) → branchés ici ;
  *  - `(1 + B × Éclats)^β` (EXG-38) et `mult_arbre_Éclats` (EXG-39) → branchés en T-6 ;
  *  - `mult_arbre_Ascension` (EXG-40) → branché en T-7.
  */
 export function degatsParSeconde(etat: EtatJeu, constantes: Constantes): number {
-  const multAmeliorations = FACTEUR_NEUTRE
-  const multEquipement = FACTEUR_NEUTRE
   const bonusPassifEclats = FACTEUR_NEUTRE
   const multArbreEclats = FACTEUR_NEUTRE
   const multArbreAscension = FACTEUR_NEUTRE
 
   return (
     productionPassive(etat, constantes) *
-    multAmeliorations *
-    multEquipement *
+    multAmeliorations(etat, constantes) *
+    multEquipement(etat, constantes) *
     bonusPassifEclats *
     multArbreEclats *
     multArbreAscension
@@ -142,7 +131,9 @@ function secondesPourTicks(nbTicks: number): number {
 /** Crédite `nbTicks` pas de production passive en une seule opération arithmétique (forme fermée). */
 function crediterProduction(etat: EtatJeu, nbTicks: number, constantes: Constantes): EtatJeu {
   const degats = degatsParSeconde(etat, constantes) * secondesPourTicks(nbTicks)
-  const or = degats * constantes.or.orParDegatMoyen
+  // EXG-6 agrégé : l'or suit les dégâts infligés, au multiplicateur de la zone courante près
+  // (`mult_or_zone(1) = 1`, donc la zone de départ ne change rien).
+  const or = orPourDegats(degats, etat.combat.zone, constantes)
   return {
     ...etat,
     bourse: { ...etat.bourse, or: etat.bourse.or + or },
@@ -152,14 +143,105 @@ function crediterProduction(etat: EtatJeu, nbTicks: number, constantes: Constant
   }
 }
 
+/* ─────────────────────────────────────────────────── combat dans le tick (T-5, EXG-30) */
+
 /**
- * EXG-1 — avance la simulation d'exactement un pas de `PAS_TICK_MS`. Coût constant : la production est
- * une somme sur un nombre fixe d'écoles, jamais sur l'historique (EXG-30).
- * Le combat (vagues, boss, projectiles) est branché en T-5 (lot C) et consommera la même production.
+ * Avance le combat d'un pas et en tire les conséquences hors combat : monstres tués, zone maximale du
+ * run (entrée du gain d'Éclats, EXG-18), révélation d'école par boss vaincu (EXG-8) et compteur de coût.
+ * `degatsInstantanes` porte les dégâts de clic et de sorts du pas (EXG-11, EXG-12) ; la production
+ * passive est ajoutée ici à partir de la chaîne de DPS (§8).
+ * Coût constant : au plus quelques étapes de résolution, quel que soit le DPS (EXG-30).
+ */
+export function avancerCombatJeu(
+  etat: EtatJeu,
+  dtMs: number,
+  constantes: Constantes,
+  degatsInstantanes = 0,
+): { etat: EtatJeu; avancement: AvancementCombat } {
+  const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0
+  const instantanes = Number.isFinite(degatsInstantanes) && degatsInstantanes > 0 ? degatsInstantanes : 0
+  const degats = degatsParSeconde(etat, constantes) * (dt / MS_PAR_SECONDE) + instantanes
+  const avancement = avancerCombat(etat.combat, degats, dt, constantes)
+
+  const apresCombat: EtatJeu = {
+    ...etat,
+    combat: avancement.combat,
+    magicien: {
+      ...etat.magicien,
+      monstresTues: etat.magicien.monstresTues + avancement.monstresTues,
+    },
+    prestige: {
+      ...etat.prestige,
+      // EXG-18 — la zone maximale du run ne recule jamais, même après un échec de boss (EXG-17).
+      zoneMaxDuRun: Math.max(etat.prestige.zoneMaxDuRun, avancement.combat.zone),
+    },
+    iterationsCombat: etat.iterationsCombat + avancement.iterations,
+  }
+
+  // EXG-8 — le boss d'une zone de déblocage révèle l'école suivante (nom + coût, production masquée).
+  const suivant =
+    avancement.zoneVaincue === null
+      ? apresCombat
+      : revelerEcolesDeZone(apresCombat, avancement.zoneVaincue, constantes)
+
+  return { etat: suivant, avancement }
+}
+
+/**
+ * Crédite l'or et la statistique de dégâts d'un paquet de dégâts **instantanés** (clic EXG-11, sort
+ * EXG-12), au même taux agrégé que la production passive (EXG-6). Hors-ligne, ces dégâts n'existent
+ * pas : seule la production passive compte (EXG-5).
+ */
+function crediterDegatsInstantanes(etat: EtatJeu, degats: number, constantes: Constantes): EtatJeu {
+  if (!Number.isFinite(degats) || degats <= 0) return etat
+  return {
+    ...etat,
+    bourse: { ...etat.bourse, or: etat.bourse.or + orPourDegats(degats, etat.combat.zone, constantes) },
+    magicien: { ...etat.magicien, degatsCumules: etat.magicien.degatsCumules + degats },
+  }
+}
+
+/**
+ * EXG-11 — applique un clic du sort de clic : aucun cooldown, aucune ressource, les dégâts partent
+ * immédiatement sur la cible courante. `dtMs = 0` : un clic n'est pas un pas de temps, il ne fait donc
+ * pas avancer le chrono du boss (EXG-16).
+ */
+export function appliquerClic(etat: EtatJeu, constantes: Constantes): EtatJeu {
+  const degats = degatsClic(etat, constantes)
+  const compte: EtatJeu = {
+    ...etat,
+    magicien: { ...etat.magicien, clicsCumules: etat.magicien.clicsCumules + 1 },
+  }
+  const credite = crediterDegatsInstantanes(compte, degats, constantes)
+  return avancerCombatJeu(credite, 0, constantes, degats).etat
+}
+
+/**
+ * EXG-12 / EXG-13 — déclenche un sort actif et applique ses dégâts à la cible courante. Un refus
+ * (verrouillé, en cooldown, inconnu) rend l'état d'entrée **tel quel** : aucune ressource consommée.
+ * T-20 branchera les touches 1 à 6 sur cette fonction ; le domaine ne connaît pas le clavier.
+ */
+export function lancerSort(etat: EtatJeu, idSort: string, constantes: Constantes): ResultatDeclenchement {
+  const tir = declencherSort(etat, idSort, constantes, multiplicateursAchats(etat, constantes))
+  if (!tir.declenche) return tir
+
+  const credite = crediterDegatsInstantanes(tir.etat, tir.degats, constantes)
+  return { ...tir, etat: avancerCombatJeu(credite, 0, constantes, tir.degats).etat }
+}
+
+/**
+ * EXG-1 — avance la simulation d'exactement un pas de `PAS_TICK_MS` : production passive créditée,
+ * cooldowns de sorts décomptés et auto-cast déclenché (EXG-12, EXG-40), combat avancé (T-5), jalons de
+ * quête évalués (EXG-54). Coût constant : sommes sur un nombre fixe d'écoles, de sorts et de quêtes,
+ * résolution de combat en forme fermée — jamais de boucle sur l'historique (EXG-30).
  */
 export function tick(etat: EtatJeu, constantes: Constantes): EtatJeu {
-  const avance = crediterProduction(etat, 1, constantes)
-  return { ...avance, ticksRattrapes: avance.ticksRattrapes + 1 }
+  const production = crediterProduction(etat, 1, constantes)
+  const sorts = avancerSorts(production, PAS_TICK_MS, constantes, multiplicateursAchats(etat, constantes))
+  const apresSorts = crediterDegatsInstantanes(sorts.etat, sorts.degats, constantes)
+  const combat = avancerCombatJeu(apresSorts, PAS_TICK_MS, constantes, sorts.degats)
+  const quetes = evaluerQuetes(combat.etat, constantes)
+  return { ...quetes.etat, ticksRattrapes: quetes.etat.ticksRattrapes + 1 }
 }
 
 /** EXG-3 — seuil N de ticks au-delà duquel on cesse d'itérer. Lu dans les constantes, jamais deviné. */
@@ -219,7 +301,8 @@ export function calculHorsLigne(
 
   const degatsBruts = degatsParSeconde(etat, constantes) * (tempsEcouleMs / MS_PAR_SECONDE)
   const degats = Number.isFinite(degatsBruts) && degatsBruts > 0 ? degatsBruts : 0
-  const orBrut = degats * constantes.or.orParDegatMoyen
+  // Même conversion qu'en ligne (EXG-6 agrégé), au multiplicateur de la zone où le joueur s'est arrêté.
+  const orBrut = orPourDegats(degats, etat.combat.zone, constantes)
   const orGagne = Number.isFinite(orBrut) && orBrut > 0 ? orBrut : 0
 
   // L'horodatage de référence ne recule jamais : une horloge remise à l'heure ne doit pas offrir
