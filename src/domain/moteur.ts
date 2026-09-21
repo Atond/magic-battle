@@ -8,7 +8,6 @@
 //  3. coût constant par appel — aucune boucle proportionnelle à l'historique de jeu (EXG-30).
 
 import {
-  FACTEUR_NEUTRE,
   MS_PAR_HEURE,
   MS_PAR_SECONDE,
   PAS_TICK_MS,
@@ -17,7 +16,14 @@ import {
   ZONE_DEPART,
 } from './constantes-moteur.ts'
 import { multAmeliorations, multEquipement, multiplicateursAchats } from './ameliorations/index.ts'
+import { multArbreAscension } from './ascension/index.ts'
 import { productionEcoles, revelerEcolesDeZone } from './ecoles/index.ts'
+import {
+  bonusPassifEclats,
+  facteurCooldownArbres,
+  multArbreEclats,
+  multOrArbres,
+} from './prestige/index.ts'
 import { evaluerQuetes } from './quetes/index.ts'
 import { avancerSorts, declencherSort, degatsClic } from './sorts/index.ts'
 import type {
@@ -99,26 +105,30 @@ export function productionPassive(etat: EtatJeu, constantes: Constantes): number
 }
 
 /**
- * §8 — chaîne complète des multiplicateurs de dégâts. Les deux facteurs d'achats sont branchés (T-8) ;
- * les facteurs de méta pas encore implémentés valent `FACTEUR_NEUTRE` (= 1, propriété du produit, pas
- * une valeur d'équilibrage) :
- *  - `mult_améliorations` (EXG-42) et `mult_équipement` (EXG-43) → branchés ici ;
- *  - `(1 + B × Éclats)^β` (EXG-38) et `mult_arbre_Éclats` (EXG-39) → branchés en T-6 ;
- *  - `mult_arbre_Ascension` (EXG-40) → branché en T-7.
+ * §8 — chaîne complète des multiplicateurs de dégâts, dans l'ordre de la spec. Les cinq facteurs sont
+ * branchés sur leur source unique, aucun ne vaut plus un facteur neutre de remplacement :
+ *  - `mult_améliorations` (EXG-42) et `mult_équipement` (EXG-43) → `ameliorations/` (T-8) ;
+ *  - `(1 + B × Éclats_possédés)^β` (EXG-38) et `mult_arbre_Éclats` (EXG-39) → `prestige/` (T-6) ;
+ *  - `mult_arbre_Ascension` (EXG-40) → `ascension/` (T-7).
  */
 export function degatsParSeconde(etat: EtatJeu, constantes: Constantes): number {
-  const bonusPassifEclats = FACTEUR_NEUTRE
-  const multArbreEclats = FACTEUR_NEUTRE
-  const multArbreAscension = FACTEUR_NEUTRE
-
   return (
     productionPassive(etat, constantes) *
     multAmeliorations(etat, constantes) *
     multEquipement(etat, constantes) *
-    bonusPassifEclats *
-    multArbreEclats *
-    multArbreAscension
+    bonusPassifEclats(etat, constantes) *
+    multArbreEclats(etat, constantes) *
+    multArbreAscension(etat, constantes)
   )
+}
+
+/**
+ * EXG-6 / EXG-39 — or gagné pour un paquet de dégâts : le taux agrégé de la zone courante, multiplié par
+ * les nœuds d'arbre qui portent sur l'or. Un seul point de conversion dégâts → or dans tout le moteur
+ * (tick, dégâts instantanés, hors-ligne), donc un seul endroit où ce facteur s'applique.
+ */
+function orDesDegats(etat: EtatJeu, degats: number, constantes: Constantes): number {
+  return orPourDegats(degats, etat.combat.zone, constantes) * multOrArbres(etat, constantes)
 }
 
 /* ──────────────────────────────────────────────────────────────── tick & delta-time */
@@ -132,8 +142,8 @@ function secondesPourTicks(nbTicks: number): number {
 function crediterProduction(etat: EtatJeu, nbTicks: number, constantes: Constantes): EtatJeu {
   const degats = degatsParSeconde(etat, constantes) * secondesPourTicks(nbTicks)
   // EXG-6 agrégé : l'or suit les dégâts infligés, au multiplicateur de la zone courante près
-  // (`mult_or_zone(1) = 1`, donc la zone de départ ne change rien).
-  const or = orPourDegats(degats, etat.combat.zone, constantes)
+  // (`mult_or_zone(1) = 1`, donc la zone de départ ne change rien) et aux nœuds d'or près (EXG-39).
+  const or = orDesDegats(etat, degats, constantes)
   return {
     ...etat,
     bourse: { ...etat.bourse, or: etat.bourse.or + or },
@@ -196,7 +206,7 @@ function crediterDegatsInstantanes(etat: EtatJeu, degats: number, constantes: Co
   if (!Number.isFinite(degats) || degats <= 0) return etat
   return {
     ...etat,
-    bourse: { ...etat.bourse, or: etat.bourse.or + orPourDegats(degats, etat.combat.zone, constantes) },
+    bourse: { ...etat.bourse, or: etat.bourse.or + orDesDegats(etat, degats, constantes) },
     magicien: { ...etat.magicien, degatsCumules: etat.magicien.degatsCumules + degats },
   }
 }
@@ -237,7 +247,10 @@ export function lancerSort(etat: EtatJeu, idSort: string, constantes: Constantes
  */
 export function tick(etat: EtatJeu, constantes: Constantes): EtatJeu {
   const production = crediterProduction(etat, 1, constantes)
-  const sorts = avancerSorts(production, PAS_TICK_MS, constantes, multiplicateursAchats(etat, constantes))
+  // EXG-12 / EXG-39 — un nœud de cooldown fait tourner l'horloge de recharge `1/facteur` fois plus vite,
+  // ce qui est exactement équivalent à raccourcir `cooldownMs` sans dupliquer la durée du contrat.
+  const dtCooldownMs = PAS_TICK_MS / facteurCooldownArbres(etat, constantes)
+  const sorts = avancerSorts(production, dtCooldownMs, constantes, multiplicateursAchats(etat, constantes))
   const apresSorts = crediterDegatsInstantanes(sorts.etat, sorts.degats, constantes)
   const combat = avancerCombatJeu(apresSorts, PAS_TICK_MS, constantes, sorts.degats)
   const quetes = evaluerQuetes(combat.etat, constantes)
@@ -302,7 +315,7 @@ export function calculHorsLigne(
   const degatsBruts = degatsParSeconde(etat, constantes) * (tempsEcouleMs / MS_PAR_SECONDE)
   const degats = Number.isFinite(degatsBruts) && degatsBruts > 0 ? degatsBruts : 0
   // Même conversion qu'en ligne (EXG-6 agrégé), au multiplicateur de la zone où le joueur s'est arrêté.
-  const orBrut = orPourDegats(degats, etat.combat.zone, constantes)
+  const orBrut = orDesDegats(etat, degats, constantes)
   const orGagne = Number.isFinite(orBrut) && orBrut > 0 ? orBrut : 0
 
   // L'horodatage de référence ne recule jamais : une horloge remise à l'heure ne doit pas offrir

@@ -147,6 +147,29 @@ export interface Equipement {
   readonly description: string
 }
 
+/**
+ * §8 / EXG-39 / EXG-40 — nature de l'effet d'un nœud d'arbre : ce que son rang modifie dans le moteur.
+ * Cette union est le **contrat** entre le catalogue de nœuds (donnée) et le moteur : ajouter un nœud est
+ * une écriture de contenu, ajouter un *type* d'effet est une modification de moteur.
+ * EXG-39 couvre les quatre premiers (dégâts, or, zone de départ, cooldowns), EXG-40 les trois derniers
+ * (auto-cast, synergies entre écoles, bonus de départ de run).
+ */
+export type TypeEffetNoeud =
+  /** §8 — facteur de la chaîne de DPS (`mult_arbre_Éclats` / `mult_arbre_Ascension`). */
+  | 'multDegats'
+  /** EXG-6 — facteur appliqué à l'or gagné. */
+  | 'multOr'
+  /** EXG-19 / EXG-39 — décale la zone où reprend un run après réinitialisation. */
+  | 'zoneDepart'
+  /** EXG-12 — raccourcit les cooldowns de sorts (facteur < 1 par rang). */
+  | 'reductionCooldown'
+  /** EXG-40 — arme l'auto-cast du sort désigné par `idSortCible`. */
+  | 'autoCast'
+  /** EXG-40 — synergie entre écoles : le facteur croît avec le nombre d'écoles débloquées. */
+  | 'synergieEcoles'
+  /** EXG-40 — bonus de départ de run : or crédité à chaque réinitialisation. */
+  | 'orDepart'
+
 /** §5 / EXG-39 / EXG-40 — un nœud d'arbre. `rangsInfinis` marque le nœud répétable exigé par la spec §8. */
 export interface NoeudArbre {
   readonly id: string
@@ -341,6 +364,67 @@ export interface AvancementCombat {
   readonly iterations: number
 }
 
+/**
+ * EXG-19 / EXG-21 — ce qu'une réinitialisation de run emporte. Sert la 1re étape de la confirmation à
+ * deux étapes : le joueur voit le prix avant de payer, l'UI (T-23) n'a rien à recalculer.
+ */
+export interface PerteDeRun {
+  /** Zone la plus profonde atteinte pendant le run (EXG-18). */
+  readonly zoneAtteinte: number
+  readonly or: number
+  /** Somme des niveaux d'écoles achetés pendant le run (EXG-9). */
+  readonly niveauxEcoles: number
+}
+
+/**
+ * EXG-18 / EXG-21 — prévisualisation d'un prestige, **lecture seule** : aucune fonction produisant cette
+ * valeur ne modifie l'état (c'est l'étape 1 de la confirmation à deux étapes).
+ */
+export interface ApercuPrestige {
+  readonly disponible: boolean
+  /** Motif d'indisponibilité, `null` si le prestige est possible. */
+  readonly motifIndisponible: MotifRefus | null
+  /** EXG-18 — `floor(k × zone_max^α)`, crédité sur les **deux** compteurs d'Éclats (ADR-8). */
+  readonly eclatsGagnes: number
+  readonly zoneMaxDuRun: number
+  readonly perte: PerteDeRun
+  /** EXG-19 / EXG-39 — zone où le run repart (décalée par les nœuds « zone de départ »). */
+  readonly zoneReprise: number
+  /** EXG-40 — or crédité au départ du nouveau run (bonus de départ de l'arbre d'Ascension). */
+  readonly orDeDepart: number
+}
+
+/** EXG-20 / EXG-21 — prévisualisation d'une Ascension, **lecture seule** (même contrat qu'`ApercuPrestige`). */
+export interface ApercuAscension {
+  readonly disponible: boolean
+  readonly motifIndisponible: MotifRefus | null
+  /** §8 — `floor(k_ascension × √Éclats_cumulés_à_vie)`. */
+  readonly pointsGagnes: number
+  readonly prestigesDuCycle: number
+  /** §8 — `prestigesParAscension` : seuil du cycle courant. */
+  readonly prestigesRequis: number
+  /** EXG-20 / ADR-14 — Éclats possédés qui partent (avec le bonus passif d'EXG-38). */
+  readonly eclatsPossedesPerdus: number
+  readonly eclatsDepensablesPerdus: number
+  /** EXG-20 / ADR-14 — nombre de nœuds de l'arbre d'Éclats qui reviennent à rang 0. */
+  readonly noeudsEclatsPerdus: number
+  readonly perte: PerteDeRun
+  /** EXG-41 — vrai si cette Ascension débloquerait la 6e école (donc la 1re seulement). */
+  readonly debloqueSixiemeEcole: boolean
+}
+
+/**
+ * EXG-19 / EXG-20 — verdict d'une réinitialisation irréversible (étape 2 de la confirmation). Même
+ * discipline que `ResultatAchat` : un refus rend l'état d'entrée **par référence**, `gain` à 0.
+ */
+export interface ResultatReinitialisation {
+  readonly etat: EtatJeu
+  readonly accepte: boolean
+  readonly motifRefus: MotifRefus | null
+  /** Monnaie de méta créditée : Éclats au prestige (EXG-18), Points à l'Ascension (§8). */
+  readonly gain: number
+}
+
 /** §4.7 — enveloppe persistée : état sérialisé + version de schéma (EXG-24, EXG-25, EXG-26). */
 export interface Sauvegarde {
   /** EXG-25 — version du schéma, pour la chaîne de migrations (EXG-26). */
@@ -453,6 +537,38 @@ export interface ConstantesPrestige {
   readonly croissanceCoutNoeud: number
 }
 
+/**
+ * EXG-39 / EXG-40 — contrat numérique d'un nœud d'arbre, commun aux deux arbres.
+ *
+ * Coût du rang `r` (0-indexé) : `coutBaseNoeud(arbre) × coutRelatif × croissanceCoutNoeud(arbre)^r`
+ * (§8, même famille que EXG-9). Le couple `(coutBaseNoeud, croissanceCoutNoeud)` est porté par l'arbre
+ * (`ConstantesPrestige`, `ConstantesAscension`) : une seule échelle de coût par arbre à chercher pour le
+ * simulateur (T-14), et `coutRelatif` pèse chaque nœud dans cette échelle.
+ */
+export interface ParametresNoeudArbre {
+  readonly id: string
+  readonly arbre: IdArbre
+  readonly effet: TypeEffetNoeud
+  /**
+   * Intensité d'**un** rang, interprétée selon `effet` :
+   *  - `multDegats` / `multOr` : facteur par rang (> 1), composé en puissance du rang ;
+   *  - `reductionCooldown` : facteur par rang (< 1), composé en puissance du rang ;
+   *  - `zoneDepart` : nombre de zones ajoutées par rang ;
+   *  - `orDepart` : or crédité par rang au départ d'un run ;
+   *  - `synergieEcoles` : bonus par rang **et par école débloquée** (forme additive) ;
+   *  - `autoCast` : ignoré (l'effet est binaire, rang ≥ 1).
+   */
+  readonly effetParRang: number
+  /** `null` = rangs infinis à coût croissant (au moins un par arbre, §8). */
+  readonly rangMax: number | null
+  /** Poids du nœud dans l'échelle de coût de son arbre (voir la formule ci-dessus). */
+  readonly coutRelatif: number
+  /** Nœuds à posséder (rang ≥ 1) avant de pouvoir acheter celui-ci ; vide pour une racine. */
+  readonly prerequis: readonly string[]
+  /** EXG-40 — sort visé par un nœud `autoCast` ; `null` pour tout autre effet. */
+  readonly idSortCible: string | null
+}
+
 /** EXG-20 / EXG-40 — ascension : gain de Points et arbre permanent. */
 export interface ConstantesAscension {
   /** §8 — `Points = floor(k_ascension × √Éclats_cumulés_à_vie)`. */
@@ -503,6 +619,11 @@ export interface Constantes {
   readonly quetes: readonly ParametresQuete[]
   readonly prestige: ConstantesPrestige
   readonly ascension: ConstantesAscension
+  /**
+   * EXG-39 / EXG-40 — catalogue des nœuds des **deux** arbres, chacun portant l'arbre auquel il
+   * appartient. Une seule liste : le moteur filtre sur `arbre`, il ne connaît aucun nœud par son nom.
+   */
+  readonly noeuds: readonly ParametresNoeudArbre[]
   readonly ameliorations: readonly ParametresAchatMultiplicatif[]
   readonly equipement: readonly ParametresAchatMultiplicatif[]
   readonly fin: ConstantesFin
