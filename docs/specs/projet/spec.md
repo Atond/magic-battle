@@ -1,15 +1,19 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 6 — 2026-09-22 —
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 7 — 2026-09-22 —
 > corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
 > `challenge-v2.md`) ; v4 ajoute ADR-16, v5 ajoute ADR-17 et ferme la dernière question ouverte de §14.
 > Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21. La v6 corrige
 > une erreur d'attribution de tâche relevée par la revue de fin de vague 1 (EXG-22/23), sans toucher aux
-> exigences elles-mêmes.
+> exigences elles-mêmes ; la v7 ajoute ADR-18 (nommage des fichiers engendrés par un outil tiers).
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v6 (2026-09-22)
+**ADR-18** (§15) tranche une contradiction relevée par la revue de fin de vague 1 : les fichiers engendrés
+par un outil tiers gardent leur nom amont, malgré la règle « français partout ». Aucune exigence modifiée.
 
 ## Changements depuis v5 (2026-09-22)
 Correction d'attribution relevée par la **revue de fin de vague 1**. T-10 (§16) revendiquait EXG-22
@@ -684,6 +688,17 @@ arbitrages stratégiques restant à trancher.
   anti-péremption (un rouge non listé échoue, un vert encore listé échoue également). Rallonger le jeu plus
   tard ne demande pas de code : adoucir `g` (de 1,21 à 1,10 double presque `D`), monter le couple vers
   5 × 6 = 30, ou étaler le contenu par zone — trois leviers d'une seule passe `equilibrage:search`.
+- **ADR-18** (2026-09-22) — Les fichiers **engendrés par un outil tiers** gardent le nom et la langue que
+  cet outil leur donne (`src/components/ui/button.tsx`, `src/lib/utils.ts` pour shadcn/ui) ; la règle
+  « nommage français » de §9 ne s'applique qu'au code écrit par le projet. Raison : la revue de fin de
+  vague 1 a relevé la contradiction, et la trancher dans l'autre sens coûterait cher pour rien — renommer
+  un composant shadcn casse la capacité du CLI à le mettre à jour (`npx shadcn add` réécrit le fichier à
+  son nom amont), et on rejouerait l'arbitrage à chaque composant ajouté en vague 2. Frontière pratique :
+  un fichier est « engendré » s'il est réécrit par une commande, jamais édité à la main — même famille de
+  règle que `src/donnees/constantes.ts`, produit par le simulateur. Le code que le projet écrit autour
+  reste en français, y compris quand il importe ces fichiers. Écarté : renommer et maintenir une couche
+  d'adaptation (coût permanent, bénéfice cosmétique) ; laisser la contradiction ouverte (la vague 2
+  arbitrerait dans les deux sens selon le fichier, ce que la revue reprochait précisément).
 
 ## 16. Livraison par vagues
 
