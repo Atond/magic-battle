@@ -15,6 +15,7 @@
 //   6. chaîne de migrations           → refus `migrationManquante`  (EXG-26)
 //   7. validation par schéma          → refus typé, chemin du champ (EXG-45)
 //   8. normalisation inter-champs     → réparation, jamais un refus
+//   9. plan d'écriture                → `.bak` puis principal, dans cette séquence (EXG-46)
 // Chaque refus rend l'état courant **par référence** : rien n'est écrit, rien n'est fusionné, et
 // l'appelant peut comparer les références pour s'en convaincre.
 //
@@ -33,7 +34,7 @@ import { MIGRATIONS, lireVersion, migrer } from './migrations.ts'
 import type { Migration } from './migrations.ts'
 import { normaliserEtat } from './normalisation.ts'
 import {
-  TAILLE_MAX_IMPORT_OCTETS,
+  LONGUEUR_MAX_IMPORT_CARACTERES,
   construireSchemaSauvegarde,
   refusImport,
   valider,
@@ -47,9 +48,10 @@ export type { Migration, ResultatMigration } from './migrations.ts'
 export { normaliserEtat } from './normalisation.ts'
 export {
   CLES_INTERDITES,
+  LONGUEUR_MAX_IMPORT_CARACTERES,
   LONGUEUR_TEXTE_MAX,
+  NOEUDS_MAX,
   PROFONDEUR_MAX,
-  TAILLE_MAX_IMPORT_OCTETS,
   construireSchemaEtat,
   construireSchemaSauvegarde,
   valider,
@@ -79,6 +81,10 @@ export const NOM_SECOURS = 'sauvegarde.bak'
 /**
  * Verdict d'un import. En cas de refus, `etat` est **l'état d'entrée lui-même** (même référence) : la
  * garantie « l'état courant reste strictement intact » est vérifiable par identité, pas par égalité.
+ *
+ * EXG-46 — un import **réussi** porte son `plan` : la liste ordonnée des écritures à effectuer, mise à
+ * l'abri comprise. C'est ce qui rend l'ordre « `.bak` d'abord » structurel plutôt que documentaire —
+ * voir `planifierImport`.
  */
 export type ResultatImport =
   | {
@@ -87,6 +93,8 @@ export type ResultatImport =
       readonly sauvegarde: Sauvegarde
       /** EXG-26 — nombre d'étapes de migration appliquées (0 pour une sauvegarde déjà à jour). */
       readonly migrationsAppliquees: number
+      /** EXG-46 — les écritures à exécuter **dans l'ordre du tableau**, et rien d'autre. */
+      readonly plan: PlanEcrasement
     }
   | { readonly ok: false; readonly etat: EtatJeu; readonly erreur: ErreurImport }
 
@@ -99,12 +107,44 @@ export interface Ecriture {
   readonly contenu: string | null
 }
 
-/** Plan d'écriture **pur** : ce qu'il faut écrire et où, sans rien écrire. */
+/**
+ * Plan d'écriture **pur** : ce qu'il faut écrire et où, sans rien écrire.
+ *
+ * `ecritures` est une **séquence**, pas un ensemble : `src/state/` l'exécute du premier au dernier
+ * élément. C'est là que vit l'ordre exigé par EXG-46 (la copie de secours avant l'écrasement), et non
+ * dans une phrase de documentation que l'appelant serait libre de ne pas lire.
+ */
 export interface PlanEcrasement {
   readonly motif: MotifEcrasement
   readonly ecritures: readonly Ecriture[]
   /** Vrai si une sauvegarde de secours existe (ou vient d'être planifiée) : pilote le bouton « restaurer ». */
   readonly secoursDisponible: boolean
+}
+
+/**
+ * Réglages d'un import. Tous facultatifs : un appel à trois arguments fait la chose attendue.
+ *
+ * Pourquoi un objet plutôt que des paramètres positionnels : ces trois réglages n'ont rien à voir
+ * entre eux, et deux d'entre eux existent déjà sous cette forme sur `migrer`/`lireVersion`. Un objet
+ * nommé se lit sur le site d'appel — `{ contenuCourant }` dit ce qu'il fait, un cinquième argument
+ * positionnel non.
+ */
+export interface OptionsImport {
+  /** EXG-26 — registre de migrations à appliquer. Par défaut, le registre réel du jeu. */
+  readonly registre?: readonly Migration[]
+  /**
+   * EXG-46 — contenu actuel de l'emplacement principal : ce que l'écrasement va détruire, `null` s'il
+   * n'y a rien. Ne sert qu'à construire le `plan` du résultat. Le passer, c'est obtenir la mise à
+   * l'abri ; ne pas le passer, c'est déclarer qu'il n'y a rien à mettre à l'abri (première partie,
+   * simple relecture du stockage).
+   */
+  readonly contenuCourant?: string | null
+  /**
+   * EXG-25 — version de format visée par la chaîne de migrations. Par défaut celle du code qui relit
+   * (`VERSION_SCHEMA`) ; injectable, exactement comme celle de `migrer` et de `lireVersion`, pour que
+   * le mécanisme de migration reste éprouvable quand le registre réel est vide.
+   */
+  readonly versionCible?: number
 }
 
 function refus(etat: EtatJeu, erreur: ErreurImport): ResultatImport {
@@ -140,25 +180,40 @@ export function serialiser(etat: EtatJeu, horodatageMs: number): Sauvegarde {
  * Inverse de `serialiser` : valide une enveloppe **déjà analysée** (objet), applique les migrations
  * puis la normalisation. C'est l'entrée à utiliser quand la charge ne vient pas d'un texte base64
  * (relecture du stockage local par `src/state/`, tests).
+ *
+ * Cette porte-là ne voit passer aucun texte, donc aucune des deux bornes de longueur d'`importerTexte`.
+ * Ce n'est pas un trou : les bornes de volume qui comptent (`NOEUDS_MAX`, ensemble des nœuds déjà vus,
+ * `PROFONDEUR_MAX`) vivent dans le **parcours** `verifierClesSures`, traversé ici comme ailleurs. Un
+ * graphe d'objets partagés ou cyclique — impossible à produire par `JSON.parse`, trivial à écrire à la
+ * main — y est borné de la même façon qu'une charge venue d'un texte.
+ *
+ * Les réglages facultatifs (registre, contenu à mettre à l'abri, version cible) passent par
+ * `OptionsImport`.
  */
 export function deserialiser(
   brut: unknown,
   etatCourant: EtatJeu,
   constantes: Constantes,
-  registre: readonly Migration[] = MIGRATIONS,
+  options: OptionsImport = {},
 ): ResultatImport {
+  const registre = options.registre ?? MIGRATIONS
+  const versionCible = options.versionCible ?? VERSION_SCHEMA
+  const contenuCourant = options.contenuCourant ?? null
+
   // 4. clés polluantes, à toute profondeur, y compris dans les dictionnaires de rangs (EXG-45).
   const sures = verifierClesSures(brut)
   if (!sures.ok) return refusDeVerdict(etatCourant, sures)
 
   // 5. version (EXG-25) puis 6. migrations (EXG-26).
-  const version = lireVersion(brut, VERSION_SCHEMA)
+  const version = lireVersion(brut, versionCible)
   if (!version.ok) return refusDeVerdict(etatCourant, version)
 
-  const migre = migrer(brut, version.valeur, VERSION_SCHEMA, registre)
+  const migre = migrer(brut, version.valeur, versionCible, registre)
   if (!migre.ok) return refusDeVerdict(etatCourant, migre)
 
-  // Une migration produit une charge encore non fiable : on rebalaie avant de valider.
+  // Une migration produit une charge encore non fiable : on rebalaie avant de valider. C'est le seul
+  // endroit où une clé polluante peut entrer **après** le premier balayage — une migration est du code
+  // du jeu, mais elle travaille sur une charge hostile et peut en recopier n'importe quoi.
   if (migre.etapes > 0) {
     const suresApres = verifierClesSures(migre.valeur)
     if (!suresApres.ok) return refusDeVerdict(etatCourant, suresApres)
@@ -170,11 +225,15 @@ export function deserialiser(
 
   // 8. cohérence inter-champs : on répare, on ne rejette pas.
   const etat = normaliserEtat(verdict.valeur.etat, constantes)
+  const sauvegarde: Sauvegarde = { ...verdict.valeur, etat }
   return {
     ok: true,
     etat,
-    sauvegarde: { ...verdict.valeur, etat },
+    sauvegarde,
     migrationsAppliquees: migre.etapes,
+    // 9. EXG-46 — le plan d'écriture part avec le résultat : l'appelant ne peut pas écrire la nouvelle
+    // sauvegarde sans passer par ce tableau, donc sans voir la mise à l'abri qui l'y précède.
+    plan: planifierImport(contenuCourant, exporterTexte(etat, sauvegarde.horodatageMs)),
   }
 }
 
@@ -193,7 +252,7 @@ export function importerTexte(
   texte: string,
   etatCourant: EtatJeu,
   constantes: Constantes,
-  registre: readonly Migration[] = MIGRATIONS,
+  options: OptionsImport = {},
 ): ResultatImport {
   // 1. borne de taille avant tout travail : une charge démesurée est refusée sans être décodée.
   if (typeof texte !== 'string' || texte.length === 0) {
@@ -202,7 +261,7 @@ export function importerTexte(
       refusImport('base64Invalide', NOM_PRINCIPAL, 'Aucun code de sauvegarde à importer.'),
     )
   }
-  if (texte.length > TAILLE_MAX_IMPORT_OCTETS) {
+  if (texte.length > LONGUEUR_MAX_IMPORT_CARACTERES) {
     return refusDeVerdict(
       etatCourant,
       refusImport('tropLong', NOM_PRINCIPAL, 'Ce code de sauvegarde est démesuré : import refusé.'),
@@ -217,7 +276,7 @@ export function importerTexte(
       refusImport('base64Invalide', NOM_PRINCIPAL, 'Ce code de sauvegarde est illisible (base64 invalide).'),
     )
   }
-  if (json.length > TAILLE_MAX_IMPORT_OCTETS) {
+  if (json.length > LONGUEUR_MAX_IMPORT_CARACTERES) {
     return refusDeVerdict(
       etatCourant,
       refusImport('tropLong', NOM_PRINCIPAL, 'Cette sauvegarde est démesurée : import refusé.'),
@@ -236,7 +295,7 @@ export function importerTexte(
     )
   }
 
-  return deserialiser(brut, etatCourant, constantes, registre)
+  return deserialiser(brut, etatCourant, constantes, options)
 }
 
 /* ══════════════════════════════════════════════════════════════ EXG-46 — sauvegarde de secours */
@@ -244,8 +303,13 @@ export function importerTexte(
 /**
  * EXG-46 — avant tout import ou toute nouvelle partie qui écraserait la sauvegarde existante, la
  * sauvegarde courante part vers l'emplacement de secours. Politique **pure** : cette fonction dit quoi
- * écrire et où, `src/state/` l'exécute (et doit l'exécuter **avant** l'écrasement, pas après).
+ * écrire et où, `src/state/` l'exécute.
  * Rien à sauver (première partie, stockage vide) ⇒ aucune écriture, et pas de secours factice.
+ *
+ * Note d'usage : cette fonction ne planifie **que** la mise à l'abri. Pour un import, c'est
+ * `planifierImport` (ou, mieux, le `plan` que porte déjà le résultat d'import) qu'il faut lire :
+ * l'écrasement y figure, après la mise à l'abri, dans la même séquence — de sorte qu'aucun appelant ne
+ * puisse écrire la nouvelle sauvegarde sans avoir traversé l'ancienne.
  */
 export function planifierEcrasement(
   contenuCourant: string | null,
@@ -258,6 +322,40 @@ export function planifierEcrasement(
     motif,
     ecritures: [{ nom: NOM_SECOURS, contenu: contenuCourant }],
     secoursDisponible: true,
+  }
+}
+
+/**
+ * EXG-46 — le plan complet d'un écrasement : mise à l'abri **puis** écriture de la nouvelle sauvegarde,
+ * dans cet ordre, dans une seule séquence.
+ *
+ * Pourquoi cette fonction existe alors que `planifierEcrasement` suffisait : « l'appelant doit copier
+ * l'ancienne sauvegarde avant d'écrire la nouvelle » n'était qu'une phrase de commentaire. Rien
+ * n'empêchait `src/state/` d'écrire d'abord, de copier ensuite (donc de copier la nouvelle sur
+ * l'ancienne), ni d'oublier la copie — et le test qui « vérifiait » l'ordre le mettait lui-même dans le
+ * bon ordre : il validait le test, pas le code. En faisant porter la séquence par le résultat d'import,
+ * l'invariant devient structurel : il n'existe qu'un seul objet qui dit quoi écrire, et il porte déjà
+ * l'ancienne sauvegarde en première position.
+ *
+ * Deux propriétés distinctes, à ne pas confondre :
+ *  - **complétude** — la mise à l'abri et l'écrasement sont dans la même liste. Un appelant qui exécute
+ *    la liste ne peut pas oublier la première : il n'y a pas deux appels à passer, il y en a un ;
+ *  - **ordre** — la mise à l'abri vient en tête. Ce point est le moins critique des deux, parce que
+ *    chaque écriture porte son **contenu** (une valeur déjà capturée) et non une consigne « recopie
+ *    l'emplacement X » : même exécutée à l'envers, la copie de secours reçoit l'ancienne sauvegarde.
+ *    L'ordre reste celui qu'on écrit, pour qu'une interruption au milieu laisse toujours au moins une
+ *    copie lisible de la partie précédente.
+ */
+export function planifierImport(
+  contenuCourant: string | null,
+  nouveauContenu: string,
+  motif: MotifEcrasement = 'import',
+): PlanEcrasement {
+  const miseALAbri = planifierEcrasement(contenuCourant, motif)
+  return {
+    motif,
+    ecritures: [...miseALAbri.ecritures, { nom: NOM_PRINCIPAL, contenu: nouveauContenu }],
+    secoursDisponible: miseALAbri.secoursDisponible,
   }
 }
 
@@ -282,7 +380,7 @@ export function restaurerSecours(
   contenuSecours: string | null,
   etatCourant: EtatJeu,
   constantes: Constantes,
-  registre: readonly Migration[] = MIGRATIONS,
+  options: OptionsImport = {},
 ): ResultatImport {
   if (typeof contenuSecours !== 'string' || contenuSecours.length === 0) {
     return refusDeVerdict(
@@ -290,5 +388,10 @@ export function restaurerSecours(
       refusImport('secoursAbsent', NOM_SECOURS, 'Aucune sauvegarde de secours à restaurer.'),
     )
   }
-  return importerTexte(contenuSecours, etatCourant, constantes, registre)
+  const resultat = importerTexte(contenuSecours, etatCourant, constantes, options)
+  if (!resultat.ok) return resultat
+  // Le chemin retour ne met rien à l'abri : la copie de secours est justement ce qu'on relit, l'écraser
+  // avec son propre contenu n'apporterait rien et la perdrait en cas d'interruption. Le plan se réduit
+  // donc à réinstaller la sauvegarde active.
+  return { ...resultat, plan: planifierRestauration(contenuSecours) }
 }

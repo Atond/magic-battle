@@ -28,17 +28,23 @@ import {
   importerTexte,
   normaliserEtat,
   planifierEcrasement,
+  planifierImport,
   planifierRestauration,
   restaurerSecours,
   serialiser,
 } from '../../src/domain/sauvegarde/index.ts'
+import type { PlanEcrasement } from '../../src/domain/sauvegarde/index.ts'
 import {
   CLES_INTERDITES,
   PROFONDEUR_MAX,
-  TAILLE_MAX_IMPORT_OCTETS,
+  LONGUEUR_MAX_IMPORT_CARACTERES,
+  NOEUDS_MAX,
   construireSchemaEtat,
+  dictionnaire,
+  entier,
   liste,
   nombre,
+  objet,
   valider,
 } from '../../src/domain/sauvegarde/schema.ts'
 import type { MotifRefusImport, Schema } from '../../src/domain/sauvegarde/schema.ts'
@@ -244,9 +250,9 @@ describe('EXG-45 / EXG-27 — rejets d’import, fixture par fixture', () => {
     }
   })
 
-  it('refuse une charge au-delà de la taille maximale d’import', () => {
+  it('refuse une charge au-delà de la longueur maximale d’import', () => {
     const courant = etatInitial(HORODATAGE)
-    const enorme = 'A'.repeat(TAILLE_MAX_IMPORT_OCTETS + 4)
+    const enorme = 'A'.repeat(LONGUEUR_MAX_IMPORT_CARACTERES + 4)
     const resultat = importer(enorme, courant)
     expect(resultat.ok).toBe(false)
     if (!resultat.ok) expect(resultat.erreur.motif).toBe('tropLong')
@@ -408,6 +414,95 @@ describe('EXG-46 — sauvegarde de secours avant écrasement (politique pure)', 
   })
 })
 
+/* ═══════════════════════════════ EXG-46 — l'ordre de la mise à l'abri, rendu structurel (T-10) */
+
+describe('EXG-46 — la mise à l’abri voyage avec le résultat d’import, pas dans une consigne', () => {
+  // Le test voisin (`import réussi puis restauration`) met lui-même les étapes dans le bon ordre : il
+  // prouve que *le test* sait faire, pas que le code l'impose. Ici, l'appelant est un `src/state/`
+  // minimal qui ne sait rien faire d'autre qu'exécuter la séquence qu'on lui donne, du premier au
+  // dernier élément. S'il peut encore perdre la sauvegarde précédente, c'est le plan qui est fautif.
+  function executer(stockage: Map<string, string>, plan: PlanEcrasement): void {
+    for (const ecriture of plan.ecritures) {
+      if (ecriture.contenu === null) stockage.delete(ecriture.nom)
+      else stockage.set(ecriture.nom, ecriture.contenu)
+    }
+  }
+
+  /** Une partie déjà entamée, et son texte d'export : ce que l'import va écraser. */
+  function partieEnCours(): { etat: EtatJeu; contenu: string } {
+    const depart = etatInitial(HORODATAGE)
+    const riche: EtatJeu = { ...depart, bourse: { ...depart.bourse, or: 1e5 } }
+    const etat = serialiser(acheterNiveaux(riche, 'feu', 8, C).etat, HORODATAGE).etat
+    return { etat, contenu: exporterTexte(etat, HORODATAGE) }
+  }
+
+  it('un import réussi rend une séquence qui écrit le secours avant la sauvegarde active', () => {
+    const avant = partieEnCours()
+    const resultat = importerTexte(
+      texteVersBase64(fixture('sauvegarde-v1-valide.json')),
+      avant.etat,
+      C,
+      { contenuCourant: avant.contenu },
+    )
+    expect(resultat.ok).toBe(true)
+    if (!resultat.ok) return
+
+    // L'ordre est porté par le tableau : il n'y a pas d'autre endroit où le lire, ni où le choisir.
+    expect(resultat.plan.ecritures.map((ecriture) => ecriture.nom)).toEqual([NOM_SECOURS, NOM_PRINCIPAL])
+    expect(resultat.plan.ecritures[0].contenu).toBe(avant.contenu)
+    expect(resultat.plan.secoursDisponible).toBe(true)
+    expect(resultat.plan.motif).toBe('import')
+  })
+
+  it('un appelant qui ne sait qu’exécuter le plan ne peut pas perdre la partie précédente', () => {
+    const avant = partieEnCours()
+    const stockage = new Map<string, string>([[NOM_PRINCIPAL, avant.contenu]])
+
+    const importe = importerTexte(
+      texteVersBase64(fixture('sauvegarde-v1-valide.json')),
+      avant.etat,
+      C,
+      { contenuCourant: stockage.get(NOM_PRINCIPAL) ?? null },
+    )
+    expect(importe.ok).toBe(true)
+    if (!importe.ok) return
+    executer(stockage, importe.plan)
+
+    // La partie précédente est à l'abri, la sauvegarde active a bien changé.
+    expect(stockage.get(NOM_SECOURS)).toBe(avant.contenu)
+    expect(stockage.get(NOM_PRINCIPAL)).not.toBe(avant.contenu)
+
+    // …et le chemin retour la réinstalle, toujours sans que l'appelant ait à savoir dans quel ordre.
+    const restaure = restaurerSecours(stockage.get(NOM_SECOURS) ?? null, importe.etat, C)
+    expect(restaure.ok).toBe(true)
+    if (!restaure.ok) return
+    executer(stockage, restaure.plan)
+    expect(restaure.etat).toEqual(avant.etat)
+    expect(stockage.get(NOM_PRINCIPAL)).toBe(avant.contenu)
+    expect(restaure.plan.motif).toBe('restauration')
+  })
+
+  it('première partie : rien à mettre à l’abri, le plan se réduit à la sauvegarde active', () => {
+    const resultat = importerTexte(texteVersBase64(fixture('sauvegarde-v1-valide.json')), etatInitial(HORODATAGE), C)
+    expect(resultat.ok).toBe(true)
+    if (!resultat.ok) return
+    expect(resultat.plan.ecritures.map((ecriture) => ecriture.nom)).toEqual([NOM_PRINCIPAL])
+    expect(resultat.plan.secoursDisponible).toBe(false)
+    // Le contenu planifié est exactement ce que produirait un export de l'état rechargé : relire le
+    // stockage et le réécrire est idempotent, il n'y a pas deux formats d'écriture dans le jeu.
+    expect(resultat.plan.ecritures[0].contenu).toBe(exporterTexte(resultat.etat, resultat.sauvegarde.horodatageMs))
+  })
+
+  it('`planifierImport` compose la mise à l’abri et l’écrasement, dans cet ordre', () => {
+    const plan = planifierImport('ancienne', 'nouvelle')
+    expect(plan.ecritures).toEqual([
+      { nom: NOM_SECOURS, contenu: 'ancienne' },
+      { nom: NOM_PRINCIPAL, contenu: 'nouvelle' },
+    ])
+    expect(planifierImport(null, 'nouvelle').ecritures).toEqual([{ nom: NOM_PRINCIPAL, contenu: 'nouvelle' }])
+  })
+})
+
 /* ══════════════════════════════════════════════ cohérence après chargement (normalisation) */
 
 describe('normalisation — une sauvegarde valide mais incohérente est réparée, pas rejetée', () => {
@@ -545,5 +640,136 @@ describe('tests durs — la validation est linéaire en taille et bornée en pro
     const valide = fixtureJson('sauvegarde-v1-valide.json') as Sauvegarde
     const charge = { ...valide, etat: { ...valide.etat, combat: { ...valide.etat.combat, zone: ZONE_DEPART - 1 } } }
     expect(deserialiser(charge, etatInitial(HORODATAGE), C).ok).toBe(false)
+  })
+
+  /* ── la porte `deserialiser` : une charge qui n'est jamais passée par un texte ─────────────────── */
+  // `importerTexte` borne la longueur du texte, deux fois. `deserialiser` ne voit aucun texte : c'est
+  // pourtant l'entrée que la documentation recommande à `src/state/` pour relire le stockage local.
+  // Les trois tests qui suivent attaquent donc `deserialiser` avec ce que `JSON.parse` ne sait pas
+  // produire — un graphe. Le budget est l'assertion (LRN-002) : sans borne dans le parcours lui-même,
+  // aucun de ces appels ne rend la main.
+
+  it('un graphe qui partage ses nœuds ne fait pas exploser le balayage des clés', () => {
+    // Douze étages de dix arêtes vers l'étage suivant : 121 objets en mémoire, une profondeur de 14
+    // (sous PROFONDEUR_MAX, qui ne sert donc à rien ici) et 10¹² chemins racine → feuille. Un parcours
+    // qui explore les *chemins* au lieu des *nœuds* ne rend jamais la main.
+    //
+    // Le piège est placé pour que le test ne puisse pas passer par chance : la clé interdite est dans
+    // une branche sœur que le parcours en profondeur visite **en dernier**, après le graphe entier. Le
+    // motif `clePolluante` ne peut donc être rendu que si le graphe a été traversé jusqu'au bout — en
+    // temps fini. Le chronomètre est l'assertion (LRN-002).
+    let noeud: Record<string, unknown> = { fond: true }
+    for (let etage = 0; etage < 12; etage += 1) {
+      const suivant: Record<string, unknown> = {}
+      for (let arete = 0; arete < 10; arete += 1) suivant[`k${arete}`] = noeud
+      noeud = suivant
+    }
+    const charge = {
+      version: 1,
+      horodatageMs: HORODATAGE,
+      piege: JSON.parse('{"__proto__": {"pollue": true}}') as unknown,
+      etat: noeud,
+    }
+
+    const depart = performance.now()
+    const resultat = deserialiser(charge, etatInitial(HORODATAGE), C)
+    const duree = performance.now() - depart
+
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok) expect(resultat.erreur.motif).toBe('clePolluante')
+    expect(duree).toBeLessThan(BUDGET_MS)
+    expect(Object.prototype).not.toHaveProperty('pollue')
+  }, BUDGET_MS * 3)
+
+  it('un cycle rend la main au lieu de tourner indéfiniment', () => {
+    // Un cycle fait croître la profondeur à chaque tour : c'est `PROFONDEUR_MAX` qui le referme, et
+    // l'ensemble des nœuds vus qui évite d'y arriver par un détour coûteux. Ce que ce test assure,
+    // c'est le fait acquis : l'appel rend la main.
+    const boucle: Record<string, unknown> = { version: 1, horodatageMs: HORODATAGE }
+    boucle.etat = boucle
+
+    const depart = performance.now()
+    const resultat = deserialiser(boucle, etatInitial(HORODATAGE), C)
+    expect(resultat.ok).toBe(false)
+    expect(performance.now() - depart).toBeLessThan(BUDGET_MS)
+  }, BUDGET_MS * 3)
+
+  it('le budget de nœuds refuse une charge démesurée passée en objet', () => {
+    // Une charge plate, mais au-delà du budget : la borne existe et elle est atteignable sans texte.
+    const enorme: Record<string, unknown> = { version: 1, horodatageMs: HORODATAGE }
+    const etat: Record<string, unknown> = {}
+    for (let i = 0; i < NOEUDS_MAX + 2; i += 1) etat[`n${i}`] = {}
+    enorme.etat = etat
+
+    const depart = performance.now()
+    const resultat = deserialiser(enorme, etatInitial(HORODATAGE), C)
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok) expect(resultat.erreur.motif).toBe('tropLong')
+    expect(performance.now() - depart).toBeLessThan(BUDGET_MS)
+  }, BUDGET_MS * 3)
+})
+
+/* ══════════════════════════ EXG-45 — l'écriture de la valeur reconstruite, clé par clé */
+
+describe('EXG-45 — aucune clé, même venue du catalogue, ne peut changer un prototype', () => {
+  // `validerObjet` écrit sur des clés littérales du schéma : inoffensif. `validerDictionnaire`, lui,
+  // écrit sur des clés venues du **catalogue** (`src/donnees/`). Le catalogue est généré et de
+  // confiance, donc ce n'est pas une faille ouverte — mais la propriété revendiquée dans `schema.ts`
+  // (« aucune clé hostile ne peut être posée ici, même si le balayage préalable était contourné ») doit
+  // être vraie des deux côtés. Ce test appelle `valider` directement : le balayage EST contourné.
+
+  it('une entrée de dictionnaire nommée `__proto__` devient une propriété inerte', () => {
+    const schemaRang = objet<{ rang: number }>({ rang: entier(0, 9) })
+    const schema = dictionnaire([
+      ['__proto__', schemaRang],
+      ['noeud-normal', schemaRang],
+    ])
+    // `JSON.parse` est le seul moyen d'écrire une propriété **propre** nommée `__proto__` : un littéral
+    // d'objet `{ __proto__: … }` changerait le prototype au lieu de créer une clé.
+    const charge = JSON.parse('{"__proto__": {"rang": 3}, "noeud-normal": {"rang": 1}}') as unknown
+
+    const verdict = valider(charge, schema, 'test')
+    expect(verdict.ok).toBe(true)
+    if (!verdict.ok) return
+    const reconstruit = verdict.valeur as Record<string, unknown>
+
+    // L'assertion qui compte : l'objet reconstruit a gardé son prototype.
+    expect(Object.getPrototypeOf(reconstruit)).toBe(Object.prototype)
+    expect(Object.prototype.hasOwnProperty.call(reconstruit, '__proto__')).toBe(true)
+    expect((reconstruit['noeud-normal'] as { rang: number }).rang).toBe(1)
+    // …et rien n'a fui vers le prototype global.
+    expect(Object.prototype).not.toHaveProperty('rang')
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype)
+  })
+})
+
+/* ═════════════════════════════ la borne d'import et son unité (elle dit ce qu'elle compte) */
+
+describe('la borne d’import se compte en unités de code, et borne quand même les octets', () => {
+  it('la comparaison porte sur `texte.length`, à l’unité près', () => {
+    const courant = etatInitial(HORODATAGE)
+    // Juste sous la borne : refusé, mais pour une autre raison que la longueur.
+    const limite = importer('A'.repeat(LONGUEUR_MAX_IMPORT_CARACTERES), courant)
+    expect(limite.ok).toBe(false)
+    if (!limite.ok) expect(limite.erreur.motif).not.toBe('tropLong')
+    // Un caractère de plus : refusé pour longueur, sans rien décoder.
+    const trop = importer('A'.repeat(LONGUEUR_MAX_IMPORT_CARACTERES + 1), courant)
+    expect(trop.ok).toBe(false)
+    if (!trop.ok) expect(trop.erreur.motif).toBe('tropLong')
+  })
+
+  it('un JSON lourd en octets est refusé avant même d’être décodé', () => {
+    // Pourquoi compter des unités de code ne laisse pas passer une charge lourde en octets : le texte
+    // d'entrée est du base64, donc de l'ASCII, et il pèse 4/3 du JSON encodé en UTF-8. Un JSON de
+    // 200 000 caractères non ASCII (3 octets chacun) donne un code base64 de ~800 000 caractères, très
+    // au-delà de la borne — refusé au premier test, sans décodage. La borne en octets est donc tenue
+    // par celle en caractères, à un facteur 4/3 près.
+    const lourd = JSON.stringify({ version: 1, horodatageMs: HORODATAGE, nom: '€'.repeat(200_000) })
+    expect(lourd.length).toBeLessThan(LONGUEUR_MAX_IMPORT_CARACTERES)
+    expect(new TextEncoder().encode(lourd).length).toBeGreaterThan(LONGUEUR_MAX_IMPORT_CARACTERES)
+
+    const resultat = importerJsonBrut(lourd, etatInitial(HORODATAGE))
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok) expect(resultat.erreur.motif).toBe('tropLong')
   })
 })

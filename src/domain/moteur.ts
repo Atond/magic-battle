@@ -268,6 +268,8 @@ function seuilRattrapage(constantes: Constantes): number {
  * conserve le reste sous 100 ms pour la frame suivante (jamais perdu).
  * EXG-3 — au-delà de `constantes.tick.nTicksMax` ticks à rattraper, bascule en forme fermée : aucune
  * itération, donc `ticksRattrapes` n'augmente pas et le coût reste constant quelle que soit l'absence.
+ * (`ticksRattrapes` documente cette bascule ; ce qui la vérifie est le test de durée sur une session
+ * de 2 h — un compteur que le moteur s'attribue lui-même ne mesure pas son propre coût.)
  * Un delta négatif, nul ou non fini est ignoré (garde-fou d'horloge, même esprit qu'EXG-49).
  */
 export function appliquerDelta(etat: EtatJeu, dtMs: number, constantes: Constantes): EtatJeu {

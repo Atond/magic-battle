@@ -336,15 +336,25 @@ export interface EtatJeu {
   /**
    * EXG-3 / EXG-30 — compteur d'itérations de la boucle de simulation : nombre de ticks réellement
    * **itérés**, cumulé. Chaque appel de `appliquerDelta` en ajoute au plus `constantes.tick.nTicksMax`
-   * (au-delà, le moteur passe en forme fermée et n'itère pas du tout). C'est le compteur que mesurent
-   * les tests de coût, à la place d'un chronomètre.
+   * (au-delà, le moteur passe en forme fermée et n'itère pas du tout).
+   *
+   * Ce compteur **documente l'intention**, il ne prouve rien : c'est `tick()` qui se l'incrémente, donc
+   * il compte les appels à `tick()` et non le coût d'un appel. Une boucle proportionnelle à l'historique
+   * ajoutée dans `tick()` ne le ferait pas bouger d'un pas. La preuve du coût constant est le test de
+   * durée sur une session de 2 h (`tests/domain/tick.test.ts`, spec §12, LRN-002).
+   * Persisté : il fait partie du format de sauvegarde depuis la version 1 et de ses fixtures gelées.
    */
   readonly ticksRattrapes: number
   /**
    * EXG-30 — compteur d'itérations de la **résolution de combat**, cumulé (pendant de `ticksRattrapes`
    * pour les vagues). Chaque avancement de combat en ajoute un nombre borné, indépendant du DPS : les
    * vagues nettoyées d'un coup se résolvent en forme fermée (série géométrique), jamais monstre par
-   * monstre. C'est ce compteur que mesurent les tests de coût, à la place d'un chronomètre.
+   * monstre.
+   *
+   * Même réserve que ci-dessus : le nombre ajouté par pas est une constante littérale du code de combat,
+   * pas une observation du travail fait. Il dit ce que l'algorithme promet ; ce sont les tests sous
+   * timeout de `tests/domain/zones.test.ts` qui vérifient qu'il le tient (LRN-002).
+   * Persisté : il fait partie du format de sauvegarde depuis la version 1 et de ses fixtures gelées.
    */
   readonly iterationsCombat: number
   /** EXG-2 — reste de delta-time sous `PAS_TICK_MS`, conservé d'une frame à l'autre (jamais perdu). */

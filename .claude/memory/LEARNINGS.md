@@ -55,3 +55,13 @@
   née du combat et avait été appliquée au combat et à la sauvegarde — pas au tick, pas à l'équilibrage,
   où les mêmes compteurs auto-attribués et les mêmes garde-fous jamais vus rougir ont survécu. Quand un
   apprentissage est écrit, passer explicitement en revue tous les endroits qui présentent le même motif.
+
+## LRN-005 — `git add -A` est interdit tant qu'un agent écrit en arrière-plan (2026-09-22)
+- **Ce qu'on retient :** pendant qu'un subagent travaille, l'arbre de travail ne nous appartient pas. Un
+  `git add -A` y rafle ses fichiers à mi-course — code non terminé, fichiers de mesure temporaires — et
+  les enferme sous un message de commit qui parle d'autre chose. Constaté le 2026-09-22 : un commit de
+  mémoire a emporté 162 lignes de `tests/domain/tick.test.ts` en cours d'écriture et un
+  `zz-scratch.test.ts`. Le contenu final était correct, mais l'historique ment sur qui a fait quoi, et
+  c'est précisément ce à quoi sert un historique.
+- **La règle :** tant qu'un agent tourne, on stage des **chemins explicites**, jamais `-A` ni `.`. Et on
+  regarde `git status` avant de commiter, pas après.

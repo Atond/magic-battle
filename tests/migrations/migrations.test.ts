@@ -171,6 +171,45 @@ describe('EXG-26 — mécanisme de chaînage (registre fictif, déclaré dans le
     if (!resultat.ok) expect(resultat.erreur.motif).toBe('migrationManquante')
   })
 
+  it('une migration qui produit une clé polluante est refusée par le re-balayage (EXG-45)', () => {
+    // La seule branche du pipeline où une clé de prototype peut entrer **après** le premier balayage.
+    // Une migration est du code du jeu, mais elle travaille sur une charge encore hostile : rien ne
+    // l'empêche d'en recopier une clé, ou d'en fabriquer une. `JSON.parse` est le seul moyen d'écrire
+    // une propriété *propre* nommée `__proto__` — un littéral d'objet changerait le prototype.
+    const empoisonneuse: Migration = {
+      de: 1,
+      vers: 2,
+      appliquer: (charge) => ({ ...(charge as Charge), ...(JSON.parse('{"__proto__": {"or": 1e300}}') as Charge) }),
+    }
+    const resultat = deserialiser(fixture('sauvegarde-v1-valide.json'), etatInitial(HORODATAGE), C, {
+      registre: [empoisonneuse],
+      versionCible: 2,
+    })
+
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok) {
+      expect(resultat.erreur.motif).toBe('clePolluante')
+      expect(resultat.erreur.chemin).toContain('__proto__')
+    }
+    expect(Object.prototype).not.toHaveProperty('or')
+  })
+
+  it('une migration honnête n’est pas gênée par ce re-balayage', () => {
+    // Contre-épreuve : la même mécanique, sans clé interdite, passe le re-balayage et échoue plus loin
+    // (le schéma courant ne connaît pas le format 2). Le re-balayage refuse des clés, pas des étapes.
+    const honnete: Migration = {
+      de: 1,
+      vers: 2,
+      appliquer: (charge) => ({ ...(charge as Charge), champAjoute: 1 }),
+    }
+    const resultat = deserialiser(fixture('sauvegarde-v1-valide.json'), etatInitial(HORODATAGE), C, {
+      registre: [honnete],
+      versionCible: 2,
+    })
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok) expect(resultat.erreur.motif).not.toBe('clePolluante')
+  })
+
   it('les clés d’un ancien format non reprises par le schéma sont ignorées, pas fusionnées (EXG-45)', () => {
     // Le cas complet : une charge au format « précédent » (l'or vivait à la racine, hors de la bourse)
     // traverse l'import réel. Le champ hérité n'est pas lu, et l'état reconstruit ne le contient pas.

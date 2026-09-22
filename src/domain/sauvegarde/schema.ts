@@ -15,7 +15,10 @@
 //     est donc vrai sans liste de clés interdites à maintenir ;
 //  2. **exhaustivité vérifiée par le compilateur** — `objet<T>()` exige une entrée par champ de `T`.
 //     Le jour où T-13 ajoute un champ à `EtatJeu`, `npm run typecheck` tombe avant la production ;
-//  3. **coût borné** — validation linéaire en taille d'entrée, récursion bornée par `PROFONDEUR_MAX`.
+//  3. **coût borné** — validation linéaire en taille d'entrée, récursion bornée par `PROFONDEUR_MAX`,
+//     et parcours des clés borné par `NOEUDS_MAX` **et** par un ensemble de nœuds déjà vus. Ces deux
+//     dernières bornes vivent dans le parcours lui-même, pas dans la porte d'entrée : elles protègent
+//     donc aussi `deserialiser()`, à qui l'on passe un objet que personne n'a mesuré.
 //
 // Aucune valeur d'équilibrage ici : chaque borne vient soit d'une constante de structure du moteur
 // (`constantes-moteur.ts`), soit du catalogue reçu en paramètre (`Constantes`), soit de la borne du
@@ -121,11 +124,33 @@ export function refusImport(motif: MotifRefusImport, chemin: string, message: st
 export const PROFONDEUR_MAX = 16
 
 /**
- * Taille maximale d'un texte d'import, en caractères. Une sauvegarde réelle de fin de partie pèse
- * quelques kilo-octets (les dictionnaires sont dimensionnés par le catalogue, pas par la durée de
- * jeu) : 256 Kio, c'est deux ordres de grandeur de marge, et un refus immédiat au-delà.
+ * Longueur maximale d'un texte d'import, **en unités de code UTF-16** — c'est-à-dire en `texte.length`,
+ * l'unité dans laquelle la borne est réellement comparée. Le nom le dit : une version précédente
+ * annonçait des octets, ce qui mentait d'un facteur allant jusqu'à 3 sur du texte non ASCII (le code
+ * base64 en entrée, lui, est ASCII : une unité = un octet).
+ *
+ * Pourquoi cette unité est la bonne : ce que cette borne protège, c'est le **travail** en aval
+ * (décodage, `JSON.parse`, parcours), et ce travail est proportionnel au nombre d'unités de code, pas
+ * au poids en octets d'un encodage particulier. Une sauvegarde réelle de fin de partie pèse quelques
+ * milliers de caractères (les dictionnaires sont dimensionnés par le catalogue, pas par la durée de
+ * jeu) : 262 144, c'est deux ordres de grandeur de marge, et un refus immédiat au-delà.
  */
-export const TAILLE_MAX_IMPORT_OCTETS = 262_144
+export const LONGUEUR_MAX_IMPORT_CARACTERES = 262_144
+
+/**
+ * Nombre maximal de nœuds (objets et tableaux) qu'un parcours de charge inspecte avant de refuser.
+ *
+ * Pourquoi cette borne existe **en plus** de la précédente : la longueur du texte ne borne que l'import
+ * par texte. Le parcours des clés, lui, est traversé par **toutes** les portes d'entrée — `deserialiser()`
+ * comprise, où la charge est un graphe d'objets déjà construit que personne n'a mesuré. Et un graphe
+ * peut partager ses nœuds : `x = {k0: x, …, k9: x}` empilé seize fois tient sous `PROFONDEUR_MAX` et
+ * sous quelques kilo-octets en mémoire, tout en offrant 10¹⁶ chemins à un parcours naïf.
+ *
+ * Valeur : la même que la borne de longueur de texte. Un JSON qui tient en `L` caractères ne peut pas
+ * décrire plus de `L / 2` nœuds (il faut au moins `{}` pour en écrire un) : cette borne ne refuse donc
+ * jamais une charge que la borne de texte accepte. Elle ne ferme qu'une porte — celle des graphes.
+ */
+export const NOEUDS_MAX = LONGUEUR_MAX_IMPORT_CARACTERES
 
 /** Longueur maximale d'un champ texte de la sauvegarde (nom du magicien, nom de monstre). */
 export const LONGUEUR_TEXTE_MAX = 120
@@ -260,6 +285,20 @@ export function estObjetSimple(valeur: unknown): valeur is Record<string, unknow
   return parent === Object.prototype || parent === null
 }
 
+/**
+ * Écriture d'une clé dans un objet reconstruit, **sans affectation**. `sortie[cle] = valeur` passerait
+ * par l'accesseur `__proto__` d'`Object.prototype` si `cle` valait `__proto__` : l'objet reconstruit
+ * changerait alors de prototype au lieu de gagner une propriété.
+ *
+ * Pour un `objet`, les clés viennent du schéma : elles sont littérales et connues à la compilation.
+ * Pour un `dictionnaire`, elles viennent du **catalogue** (`src/donnees/`) — de confiance, mais généré,
+ * donc pas littéral. `defineProperty` rend la phrase « aucune clé hostile ne peut être posée ici » vraie
+ * des deux côtés, par construction plutôt que parce qu'on a relu le catalogue.
+ */
+function poser(sortie: Record<string, unknown>, cle: string, valeur: unknown): void {
+  Object.defineProperty(sortie, cle, { value: valeur, writable: true, enumerable: true, configurable: true })
+}
+
 /** Lecture d'une propriété **propre** : jamais une propriété héritée du prototype. */
 function proprietePropre(source: Record<string, unknown>, cle: string): { presente: boolean; valeur: unknown } {
   if (!Object.prototype.hasOwnProperty.call(source, cle)) return { presente: false, valeur: undefined }
@@ -277,15 +316,28 @@ function proprietePropre(source: Record<string, unknown>, cle: string): { presen
  * clé de prototype n'est pas une sauvegarde à nettoyer, c'est une sauvegarde à refuser bruyamment.
  * Itératif (pile explicite), donc insensible à la profondeur de la charge : c'est la borne
  * `PROFONDEUR_MAX` qui tranche, pas la pile d'appels.
+ *
+ * Coût borné **quelle que soit la porte d'entrée**, par deux garde-fous qui ne supposent rien de
+ * l'origine de la charge (texte importé, objet relu du stockage, sortie d'une migration) :
+ *  - `vus` — un nœud déjà inspecté ne l'est pas deux fois. Sans lui, un graphe qui partage ses nœuds
+ *    reste sous `PROFONDEUR_MAX` tout en offrant un nombre exponentiel de *chemins* ; et un cycle
+ *    (`a.soi = a`) ne rendrait jamais la main. `JSON.parse` ne produit qu'un arbre, mais `deserialiser()`
+ *    accepte n'importe quel objet : la propriété doit tenir sans cette hypothèse ;
+ *  - `NOEUDS_MAX` — un budget dur de nœuds inspectés, qui borne le travail même si un cas d'espèce
+ *    échappait au premier garde-fou.
  */
 export function verifierClesSures(brut: unknown, chemin = 'sauvegarde'): Verdict<true> {
   const aVisiter: { valeur: unknown; chemin: string; profondeur: number }[] = [
     { valeur: brut, chemin, profondeur: 0 },
   ]
+  const vus = new Set<object>()
+  let inspectes = 0
 
   while (aVisiter.length > 0) {
     const noeud = aVisiter.pop()
     if (noeud === undefined) break
+    if (typeof noeud.valeur !== 'object' || noeud.valeur === null) continue
+
     if (noeud.profondeur > PROFONDEUR_MAX) {
       return refusImport(
         'profondeurExcessive',
@@ -293,6 +345,20 @@ export function verifierClesSures(brut: unknown, chemin = 'sauvegarde'): Verdict
         'Sauvegarde trop profondément imbriquée : elle ne ressemble pas à une sauvegarde du jeu.',
       )
     }
+
+    inspectes += 1
+    if (inspectes > NOEUDS_MAX) {
+      return refusImport(
+        'tropLong',
+        noeud.chemin,
+        'Sauvegarde démesurée : elle contient trop d’éléments pour être lue.',
+      )
+    }
+
+    // Un nœud partagé par plusieurs parents (ou par lui-même) ne se réinspecte pas : les clés qu'il
+    // porte ont déjà été jugées, et le verdict ne dépend pas du chemin emprunté pour y arriver.
+    if (vus.has(noeud.valeur)) continue
+    vus.add(noeud.valeur)
 
     if (Array.isArray(noeud.valeur)) {
       for (let i = 0; i < noeud.valeur.length; i += 1) {
@@ -303,8 +369,6 @@ export function verifierClesSures(brut: unknown, chemin = 'sauvegarde'): Verdict
       }
       continue
     }
-
-    if (typeof noeud.valeur !== 'object' || noeud.valeur === null) continue
 
     const source = noeud.valeur as Record<string, unknown>
     for (const cle of Object.keys(source)) {
@@ -461,9 +525,9 @@ function validerObjet(
     }
     const verdict = validerForme(lue.valeur, sous, cheminChamp, profondeur + 1)
     if (!verdict.ok) return verdict
-    // Écriture sur une clé issue du **schéma**, jamais de la charge : aucune clé hostile ne peut être
-    // posée ici, même si le balayage préalable était contourné.
-    sortie[cle] = verdict.valeur
+    // Écriture sur une clé issue du **schéma**, jamais de la charge, et posée sans affectation :
+    // aucune clé hostile ne peut être posée ici, même si le balayage préalable était contourné.
+    poser(sortie, cle, verdict.valeur)
   }
   return { ok: true, valeur: sortie }
 }
@@ -486,7 +550,10 @@ function validerDictionnaire(
     const cheminChamp = `${chemin}.${cle}`
     const verdict = validerForme(lue.valeur, sous, cheminChamp, profondeur + 1)
     if (!verdict.ok) return verdict
-    sortie[cle] = verdict.valeur
+    // Même règle qu'au-dessus, et elle compte davantage ici : la clé vient du catalogue, pas d'un
+    // littéral. Un identifiant de catalogue qui vaudrait `__proto__` ne peut pas changer le prototype
+    // de l'objet reconstruit — il devient une propriété propre, inerte.
+    poser(sortie, cle, verdict.valeur)
   }
   return { ok: true, valeur: sortie }
 }

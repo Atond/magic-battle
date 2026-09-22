@@ -115,8 +115,10 @@ function avancerVagues(
   iterationsInitiales: number,
 ): AvancementCombat {
   // Deux étapes de résolution, comptées d'avance et **inconditionnellement** : l'encaissement de la
-  // cible et le paquet de vagues en forme fermée. Le compteur mesure ainsi le coût de l'algorithme,
-  // identique pour 10 points de dégâts et pour 1e20 (EXG-30).
+  // cible et le paquet de vagues en forme fermée. Cette ligne **documente l'intention** — « ce pas coûte
+  // deux étapes, pour 10 points de dégâts comme pour 1e20 » — elle ne mesure rien : c'est une constante
+  // littérale, elle n'observe pas le travail réellement effectué. La preuve du coût constant est
+  // ailleurs, dans les tests sous chronomètre et sous timeout (LRN-002).
   const iterations = iterationsInitiales + 2
   const zone = zoneSaine(combat.zone)
   const total = nbVagues(constantes)
@@ -182,7 +184,9 @@ function avancerVagues(
  * EXG-15 à 17 / EXG-30 — avance le combat d'un pas de `dtMs` avec un budget de `degats`. Fonction pure
  * sur `EtatCombat` : le combat entre, un nouveau combat sort, plus le résumé de ce qui s'est passé
  * (monstres tués, boss vaincu ou échoué, zone dont le boss est tombé pour EXG-8).
- * `iterations` est le compteur de coût : il ne dépend ni du DPS ni de la profondeur atteinte.
+ * `iterations` **documente** le coût prévu de l'algorithme (il ne dépend ni du DPS ni de la profondeur
+ * atteinte) ; il ne le mesure pas, puisque c'est le code lui-même qui se l'attribue. Ce que ce compteur
+ * sert à dire, c'est l'intention ; ce qui la vérifie, ce sont les tests chronométrés (LRN-002).
  */
 export function avancerCombat(
   combat: EtatCombat,
