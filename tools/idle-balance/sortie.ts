@@ -20,8 +20,14 @@ const MIN = 60_000
 
 /* ──────────────────────────────────────────────────────────── sérialisation TypeScript */
 
-/** Nombre écrit sans bruit flottant : `1.1500000000000001` redevient `1.15`. */
-function nombre(valeur: number): string {
+/**
+ * Nombre écrit sans bruit flottant : `1.1500000000000001` redevient `1.15`.
+ *
+ * Exporté parce que c'est la **forme normale** d'une valeur livrée : `empreinte.ts` compare le fichier
+ * commité au vecteur archivé à travers cette même fonction, sinon `1.15 + 0.01` relu depuis le fichier
+ * (`1.16`) passerait pour une divergence alors que c'est le même nombre écrit proprement.
+ */
+export function serialiserNombre(valeur: number): string {
   if (!Number.isFinite(valeur)) throw new Error(`valeur non finie à sérialiser : ${valeur}`)
   if (Number.isInteger(valeur) && Math.abs(valeur) < 1e15) return String(valeur)
   return String(Number(valeur.toPrecision(12)))
@@ -31,7 +37,7 @@ function serialiser(valeur: unknown, indent = 0): string {
   const pad = '  '.repeat(indent)
   const padInterne = '  '.repeat(indent + 1)
   if (valeur === null) return 'null'
-  if (typeof valeur === 'number') return nombre(valeur)
+  if (typeof valeur === 'number') return serialiserNombre(valeur)
   if (typeof valeur === 'boolean') return String(valeur)
   if (typeof valeur === 'string') return `'${valeur.replace(/'/g, "\\'")}'`
   if (Array.isArray(valeur)) {

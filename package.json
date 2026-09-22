@@ -11,6 +11,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "equilibrage:check": "tsx tools/idle-balance/check.ts",
+    "equilibrage:empreinte": "tsx tools/idle-balance/empreinte.ts",
     "equilibrage:search": "tsx tools/idle-balance/search.ts",
     "verify": "bash scripts/verify.sh"
   },

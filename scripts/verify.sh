@@ -5,6 +5,10 @@
 # grep, indépendants de l'outillage :
 #   (p) pureté de src/domain/ — aucun import react / zustand / DOM (spec §9, invariant 1) ;
 #   (g) aucune graine d'équilibrage dans src/ — « à valider », « graine » (spec ADR-10, invariant 2).
+# Les deux étapes d'équilibrage ne font pas le même travail et aucune ne remplace l'autre :
+#   · `equilibrage:check`     rejoue les contraintes §8 — il attrape une valeur qui CASSE une contrainte ;
+#   · `equilibrage:empreinte` compare le fichier commité au vecteur archivé — il attrape une valeur
+#     retouchée à la main qui garde 13/13, c'est-à-dire précisément celle que `check` laisse passer.
 # Lancé à la main (`bash scripts/verify.sh` / `npm run verify`) ET par le hook Stop.
 #
 # Mode strict — `bash scripts/verify.sh --strict` (ou `VERIFY_STRICT=1`) : toute étape IGNORÉE devient un
@@ -75,6 +79,7 @@ etape_npm typecheck          "typecheck"
 etape_npm lint               "lint"
 etape_npm test               "test (vitest)"
 etape_npm equilibrage:check  "equilibrage:check (rejoue les constantes archivées, < 10 s)"
+etape_npm equilibrage:empreinte "equilibrage:empreinte (src/donnees/ = sortie du vecteur archivé)"
 etape_npm build              "build (vite)"
 
 echo; printf '%s\n' "${lignes[@]}"; echo

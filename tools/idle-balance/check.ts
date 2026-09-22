@@ -14,6 +14,12 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import type { Constantes } from '../../src/domain/types.ts'
 import { tableau, verifier } from './contraintes.ts'
+import {
+  conclusionBloquante,
+  lignesBloquantes,
+  lignesInformatives,
+  trierDerogations,
+} from './derogations.ts'
 import { simulerPartie, type OptionsSimulation } from './simuler.ts'
 
 const BUDGET_MS = 10_000
@@ -82,28 +88,11 @@ async function principal(): Promise<number> {
   console.log(`equilibrage:check — ${chemin}`)
   console.log(tableau(rapport))
 
-  // Trois cas, et c'est ce tri qui fait de cette commande un garde-fou de non-régression plutôt qu'un
-  // simple thermomètre :
-  //  · rouge non documenté  → régression, échec ;
-  //  · rouge documenté      → affiché en clair à chaque exécution, n'échoue pas ;
-  //  · vert mais documenté  → la dérogation a survécu à sa raison, échec (elle doit être retirée).
-  const regressions: string[] = []
-  const derogationsPerimees: string[] = []
-  for (const verdict of rapport.verdicts) {
-    const documentee = Object.prototype.hasOwnProperty.call(nonTenues, verdict.id)
-    if (!verdict.ok && !documentee) {
-      regressions.push(
-        `  RÉGRESSION ${verdict.id} — ${verdict.libelle} : mesuré ${verdict.mesure}, cible ${verdict.cible}${verdict.detail === undefined ? '' : ` (${verdict.detail})`}`,
-      )
-    } else if (!verdict.ok && documentee) {
-      console.log(`  ÉCHEC DOCUMENTÉ ${verdict.id} — mesuré ${verdict.mesure}, cible ${verdict.cible}`)
-      console.log(`    ${nonTenues[verdict.id]}`)
-    } else if (verdict.ok && documentee) {
-      derogationsPerimees.push(
-        `  DÉROGATION PÉRIMÉE ${verdict.id} — la contrainte est redevenue verte (${verdict.mesure}) : retirer l'entrée de \`CONTRAINTES_NON_TENUES\`.`,
-      )
-    }
-  }
+  // Le tri des quatre cas (régression, échec documenté, dérogation périmée, clé orpheline) vit dans
+  // `derogations.ts` : pur, donc exercé par des tests Vitest avec des verdicts fabriqués plutôt que
+  // par une simulation de 72 h (LRN-002 — voir `tests/equilibrage/derogations.test.ts`).
+  const tri = trierDerogations(rapport.verdicts, nonTenues)
+  for (const ligne of lignesInformatives(tri)) console.log(ligne)
   console.log(
     `durée ${duree} ms (budget ${BUDGET_MS} ms) · ${mesures.pas} pas · ${(mesures.tempsJeuTotalMs / 3_600_000).toFixed(2)} h de jeu simulé`,
   )
@@ -114,11 +103,9 @@ async function principal(): Promise<number> {
     )
     return 2
   }
-  if (regressions.length > 0 || derogationsPerimees.length > 0) {
-    for (const ligne of [...regressions, ...derogationsPerimees]) console.error(ligne)
-    console.error(
-      `equilibrage:check — ${regressions.length} régression(s) et ${derogationsPerimees.length} dérogation(s) périmée(s). Relancer \`npm run equilibrage:search\` et archiver un nouveau rapport (ADR-10).`,
-    )
+  if (tri.bloquant) {
+    for (const ligne of lignesBloquantes(tri)) console.error(ligne)
+    console.error(conclusionBloquante(tri))
     return 2
   }
   const documentees = Object.keys(nonTenues).length

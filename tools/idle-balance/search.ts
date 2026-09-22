@@ -21,7 +21,7 @@
 //     fichier généré change (champ déplacé, renommé, export retiré) : les valeurs sont identiques, donc
 //     relancer une descente brouillerait la provenance du vecteur sans rien apporter.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { controlerFidelite, type ResultatFidelite } from './fidelite.ts'
 import { construireConstantes, PARAMETRES_DEPART, type Parametres } from './parametres.ts'
 import {
@@ -34,6 +34,7 @@ import {
 import { verifier, type Rapport } from './contraintes.ts'
 import { ecrireConstantes, ecrireRapport, type LigneHistorique, type LigneSensibilite } from './sortie.ts'
 import { POLITIQUE_DEFAUT } from './joueur.ts'
+import { DOSSIER_RAPPORTS_RELATIF, vecteursArchives } from './vecteurs.ts'
 
 
 const H = 3_600_000
@@ -269,35 +270,22 @@ function effetMesure(avantM: Mesures, apresM: Mesures): string {
 
 /* ─────────────────────────────────────────────────────── points de départ de la descente */
 
-const DOSSIER_RAPPORTS = 'tools/idle-balance/rapports'
-
 /**
- * Vecteurs archivés par les exécutions précédentes, relus comme **points de départ supplémentaires**.
+ * Chemin d'écriture des sorties, relatif à la racine du dépôt : c'est aussi celui qui s'affiche dans
+ * le rapport. La **lecture** des vecteurs archivés vit dans `vecteurs.ts`, partagée avec `empreinte.ts`.
  *
- * Pourquoi : une descente par coordonnées est locale et dépend de son point de départ. Sans ce
- * mécanisme, une exécution peut livrer un vecteur *moins* bon que celui déjà archivé — c'est arrivé :
- * une exécution a rendu C07 rouge à 88,6 % alors que le vecteur archivé la tenait à 91,0 %, parce
- * qu'elle était repartie de zéro et avait convergé ailleurs. En repartant aussi des vecteurs archivés
- * et en gardant le meilleur, la recherche devient **monotone d'une exécution à l'autre** : elle ne peut
- * plus perdre de terrain.
+ * Les vecteurs archivés par les exécutions précédentes sont relus comme **points de départ
+ * supplémentaires** de la descente. Pourquoi : une descente par coordonnées est locale et dépend de son
+ * point de départ. Sans ce mécanisme, une exécution peut livrer un vecteur *moins* bon que celui déjà
+ * archivé — c'est arrivé : une exécution a rendu C07 rouge à 88,6 % alors que le vecteur archivé la
+ * tenait à 91,0 %, parce qu'elle était repartie de zéro et avait convergé ailleurs. En repartant aussi
+ * des vecteurs archivés et en gardant le meilleur, la recherche devient **monotone d'une exécution à
+ * l'autre** : elle ne peut plus perdre de terrain.
  *
  * Un vecteur de départ est une **entrée** de la recherche, au même titre que `PARAMETRES_DEPART` ; les
  * valeurs livrées restent des sorties, mesurées et tracées.
  */
-function vecteursArchives(): { nom: string; parametres: Parametres }[] {
-  if (!existsSync(DOSSIER_RAPPORTS)) return []
-  const trouves: { nom: string; parametres: Parametres }[] = []
-  for (const fichier of readdirSync(DOSSIER_RAPPORTS).sort()) {
-    if (!fichier.endsWith('.vecteur.json')) continue
-    try {
-      const brut = JSON.parse(readFileSync(`${DOSSIER_RAPPORTS}/${fichier}`, 'utf8')) as Parametres
-      trouves.push({ nom: `vecteur archivé ${fichier.replace('.vecteur.json', '')}`, parametres: brut })
-    } catch {
-      console.log(`  (vecteur archivé illisible, ignoré : ${fichier})`)
-    }
-  }
-  return trouves
-}
+const DOSSIER_RAPPORTS = DOSSIER_RAPPORTS_RELATIF
 
 /* ────────────────────────────────────────────────────────────── passe de sensibilité */
 
