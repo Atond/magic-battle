@@ -13,6 +13,12 @@ paths: ["src/donnees/**", "tools/idle-balance/**"]
 - Interdit dans `src/` : les marqueurs `à valider`, `graine`, `TODO équilibrage` (ou équivalents) —
   ce sont des traces de spec, pas du code livrable.
 - `npm run equilibrage:check` doit rester vert avant tout commit touchant `src/donnees/`.
+- `npm run equilibrage:empreinte` aussi, et c'est lui qui rend la règle « on ne modifie jamais une
+  constante à la main » **vérifiable** : il régénère les constantes depuis le vecteur archivé et les
+  compare au fichier commité. `check` ne voit qu'une valeur qui **casse** une contrainte §8 ; une retouche
+  manuelle qui garde 13/13 ne lui apparaît pas. Les deux sont complémentaires, aucun ne remplace l'autre.
+- Conséquence pratique : pour changer une valeur, on relance la recherche — éditer `src/donnees/` à la
+  main fait rougir l'empreinte, et c'est voulu.
 - Contraintes dures que toute sortie du simulateur doit respecter (spec §8) : 1er prestige en 2-3 h,
   aucun mur > 90 min avant le 1er prestige, 20 ≤ prestiges_total ≤ 30, ≥ 40 h de jeu cumulé simulé,
   toute valeur normale < 1e300 (EXG-37).

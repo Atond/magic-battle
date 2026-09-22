@@ -1,0 +1,72 @@
+# T-17 — porte de qualité en CI + déploiement GitHub Pages.
+# Deux jobs : `verifier` tourne sur toutes les branches et PR (même porte que le hook Stop local) ;
+# `deployer` ne tourne que sur `main`, après une vérification verte. Les agents ne poussent jamais sur
+# `main` (spec §10) : c'est le merge de la PR par l'utilisateur qui déclenche la mise en ligne.
+name: Vérification et déploiement
+
+on:
+  # `push` sur `main` seulement, `pull_request` pour tout le reste : une branche avec PR ouverte ferait
+  # sinon tourner la porte deux fois pour rien. Toute branche de travail est donc vérifiée par sa PR, et
+  # `main` l'est par son push — qui est aussi le seul chemin vers le déploiement.
+  push:
+    branches: ['main']
+  pull_request:
+  workflow_dispatch:
+
+# Aucun secret applicatif : Pages s'authentifie par OIDC (id-token), pas par un jeton stocké (spec §6).
+# Au niveau du workflow, le strict minimum — lire le dépôt. Le droit de déployer et le jeton OIDC sont
+# accordés **au seul job `deployer`** : `verifier` exécute `npm ci` puis un build complet, donc du code
+# tiers, sur n'importe quelle branche et sur les PR. Lui laisser `pages: write` et `id-token: write`
+# donnerait à un postinstall hostile ou à une dépendance compromise le droit de publier le site.
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    name: Porte de qualité (scripts/verify.sh)
+    runs-on: ubuntu-latest
+    # Une vérification par ref, annulable : c'est du calcul jetable, contrairement à un déploiement.
+    concurrency:
+      group: verifier-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # --strict : en CI, une étape « ignorée » est un échec. La tolérance par défaut de verify.sh sert
+      # au travail local ; ici, un node_modules absent ou un script npm disparu du package.json doit
+      # rougir au lieu de produire un vert trompeur. Branché depuis T-16, les 7 étapes existant toutes.
+      - name: bash scripts/verify.sh --strict
+        run: bash scripts/verify.sh --strict
+      - name: Archiver le site construit
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deployer:
+    name: Déploiement GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: verifier
+    runs-on: ubuntu-latest
+    # Le droit de publier et le jeton OIDC ne vivent QUE ici : ce job n'exécute aucun code du dépôt ni
+    # aucune dépendance, il ne fait que publier l'artefact déjà construit par `verifier`.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Un seul déploiement à la fois, et on ne coupe jamais un déploiement en cours.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - name: Configurer Pages
+        uses: actions/configure-pages@v5
+      - id: deploiement
+        uses: actions/deploy-pages@v4

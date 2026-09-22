@@ -1,11 +1,38 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 3 — 2026-09-20 —
-> **validée par l'utilisateur le 2026-09-20** après deux tours de challenge (`challenge-v1.md`, `challenge-v2.md`).
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 6 — 2026-09-22 —
+> corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
+> `challenge-v2.md`) ; v4 ajoute ADR-16, v5 ajoute ADR-17 et ferme la dernière question ouverte de §14.
+> Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21. La v6 corrige
+> une erreur d'attribution de tâche relevée par la revue de fin de vague 1 (EXG-22/23), sans toucher aux
+> exigences elles-mêmes.
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v5 (2026-09-22)
+Correction d'attribution relevée par la **revue de fin de vague 1**. T-10 (§16) revendiquait EXG-22
+(auto-sauvegarde toutes les 30 s), et §12 rangeait EXG-22/23 dans la ligne `tests/domain/sauvegarde.test.ts`
+— alors qu'aucun test ne peut les prouver depuis `src/domain/`, qui n'a par construction aucun accès au
+stockage ni à l'horloge. Le moteur n'en porte que la constante d'intervalle. Les deux exigences passent
+donc explicitement à **T-23** (vague 2), où le stockage est réellement branché. Aucun code concerné,
+aucune exigence modifiée : c'est la table qui laissait croire à une couverture inexistante.
+
+## Changements depuis v4 (2026-09-21)
+Deux ajouts, tous deux issus du rapport `tools/idle-balance/rapports/2026-09-21.md` (T-14) :
+- **ADR-17** (§15) : la durée réelle d'un run est exigée **stable ou croissante à 10 % près** et non plus croissante — la
+  croissance s'est révélée mathématiquement incompatible avec le reste du design, démonstration à l'appui.
+  §8 est amendé en conséquence (une puce).
+- **Question ouverte §14 fermée** : le seuil de mur qui fait échouer `verify.sh` porte sur le **blocage de
+  progression** (aucune zone gagnée), à 90 min ; le mur au sens « aucun achat abordable » ne dépasse jamais
+  0,5 min et ne mesure rien. §14 passe la ligne à « résolu ».
+Aucune exigence EXG modifiée, aucune formule touchée, aucun renumérotage.
+
+## Changements depuis v3 (2026-09-21)
+Un seul ajout, issu de l'implémentation de la vague 1 : **ADR-16** (§15) tranche ce que la spec laissait
+ouvert sur le périmètre du reset de prestige — les paliers d'améliorations sont remis à zéro, ceux
+d'équipement survivent. Aucune exigence modifiée, aucune formule touchée, aucun renumérotage.
 
 ## Changements depuis v2 (2026-09-20)
 Base : `challenge-v2.md` (13 points) + `interview.md` §« Complément après challenge de la spec v2 ». Détail
@@ -368,10 +395,13 @@ sont pas fixés a priori : ce sont des **sorties** du simulateur, contraintes pa
   run (entre deux prestiges consécutifs) atteint une zone strictement plus profonde que le run précédent.
   `[tranché en interview, complément challenge v2]`
 - Rejouer le contenu déjà vu du run précédent est **2-3× plus rapide** ; le contenu neuf allonge la durée
-  réelle du run. Durée réelle d'un run **croissante** d'un run à l'autre, plancher **2 h**, plafond **24 h**.
-  `[tranché en interview, complément challenge v2]`
+  réelle du run. Durée réelle d'un run **stable ou croissante à 10 % près** — aucun run ne dure moins de
+  90 % du précédent —, plancher **2 h**, plafond **24 h**.
+  `[tranché en interview, complément challenge v2] [amendé par ADR-17 — « croissante » était inatteignable]`
 - 1er sort actif ~5 min, 1er mur ~1 h, **1er prestige en 2-3 h**.
-- **Aucun mur > 90 min** avant le 1er prestige `[seuil exact à confirmer par simulation]`.
+- **Aucun blocage de progression > 90 min** avant le 1er prestige — « blocage » = intervalle sans aucune
+  zone gagnée. Le mur au sens littéral « aucun achat abordable » est mesuré séparément, à titre de garde
+  secondaire (15 min), car il ne dépasse jamais 0,5 min en pratique. `[seuil confirmé par T-14, ADR-17]`
 - Contrainte dure : **20 ≤ prestiges_total ≤ 30**, répartis en une fourchette **3-5 Ascensions** ×
   **5-8 prestiges** par Ascension (`N_ASCENSIONS_REQUISES` × `PRESTIGES_PAR_ASCENSION`) ; le simulateur
   choisit un couple compatible avec la borne dure. `[complété par le challenger v2]`
@@ -507,7 +537,9 @@ Toute migration de sauvegarde est accompagnée d'une fixture dans `tests/migrati
 | EXG-15 à EXG-17 (zones/boss) | `tests/domain/zones.test.ts` |
 | EXG-18 à EXG-21, EXG-38 à EXG-41 (prestige/ascension, arbres, 6e école) | `tests/domain/prestige.test.ts`, `tests/domain/ascension.test.ts` |
 | EXG-42, EXG-43 (améliorations/équipement, multiplicateurs) | `tests/domain/ameliorations.test.ts`, `tests/domain/equipement.test.ts` |
-| EXG-22 à EXG-27, EXG-45 à EXG-48 (sauvegarde, sécurité import, verrou) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
+| EXG-24 à EXG-27, EXG-45 à EXG-47 (sauvegarde, sécurité import) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
+| EXG-22, EXG-23 (auto-sauvegarde 30 s, sauvegarde événementielle) | **vague 2, T-23** : indémontrables depuis `domain/`, qui n'a accès ni au stockage ni à l'horloge ; le moteur n'en porte que la constante d'intervalle et la politique `.bak` `[corrigé par la revue de vague 1]` |
+| EXG-48 (verrou multi-onglet) | politique pure : `tests/domain/verrou.test.ts` ; transport `BroadcastChannel` et preuve « seul le premier onglet écrit » : vague 2, T-23 |
 | EXG-28, EXG-44 (fin de partie) | `tests/domain/fin.test.ts`, test d'intégration UI (vague 3) |
 | EXG-29, EXG-30, EXG-52 (performance/rendu) | test `canvas/`, revue de code (aucune boucle O(n) par frame), mesure de frame CI |
 | EXG-31 à EXG-35, EXG-50, EXG-51 (accessibilité/responsive) | audit outillé (axe-core), test clavier, test visuel 375/1440 px, mesure cibles tactiles |
@@ -547,7 +579,7 @@ arbitrages stratégiques restant à trancher.
 | Noms définitifs des écoles/sorts/zones/boss/équipements | Le tableau §8 et le code utilisent des noms de travail (Feu, Glace…) | Rédaction du guide de ton et du contenu en vague 3 | Vague 3 |
 | Palette de contraste exacte (couleurs sombres + fantasy) | EXG-31 fixe le ratio, pas les couleurs | Choix de palette en vague 2, vérifiée par audit outillé | Vague 2 |
 | Store React définitif (Zustand ou équivalent) | ADR-6 propose Zustand sans l'avoir comparé à une alternative concrète en conditions réelles de tick 100 ms | Décision technique à la mise en œuvre de `state/`, documentée en ADR si un autre choix s'impose | Vague 2 |
-| Seuil exact de mur (minutes) pour faire échouer `verify.sh` | §8 propose 90 min sans confirmation interview | À fixer avec les premiers résultats du simulateur | Vague 1 (T-14) |
+| ~~Seuil exact de mur (minutes) pour faire échouer `verify.sh`~~ **résolu** | — | 90 min sur le **blocage de progression** (aucune zone gagnée) ; le mur « aucun achat abordable » ne dépasse jamais 0,5 min et n'est pas la métrique utile. Rapport T-14 du 2026-09-21 | Tranché, vague 1 (T-14) |
 
 ## 15. Décisions (ADR)
 - **ADR-1** (2026-09-20) — Sauvegarde locale uniquement, pas de cloud. Raison : simplicité, cohérence avec
@@ -620,6 +652,38 @@ arbitrages stratégiques restant à trancher.
   (`zone_max^α`, `(1+B×Éclats)^β` ou multiplicatif équivalent) en plus des valeurs. Écarté : figer les
   formes a priori et ne faire varier que les constantes (c'est précisément ce qui produisait l'espace de
   recherche vide, cause du trou bloquant).
+- **ADR-16** (2026-09-21) — Le reset de prestige (EXG-19) remet à zéro les **paliers d'améliorations**
+  (achetés en or) et **laisse survivre les paliers d'équipement** (achetés en Renommée). Raison : EXG-19
+  n'énumérait que zone, or et niveaux d'écoles, mais T-6 devait trancher le sort des deux guichets de
+  multiplicateurs de T-8. Côté équipement le choix est forcé : la Renommée vient de quêtes-jalons
+  explicitement non répétables (EXG-54), donc un équipement remis à zéro serait définitivement
+  irrécupérable et le joueur perdrait du contenu à chaque prestige. Côté améliorations, l'or est la monnaie
+  du run (il est lui-même remis à zéro) : garder ses paliers viderait le prestige de son sens de reset et
+  donnerait au simulateur une courbe sans point de rupture. Règle générale qui en découle, valable pour
+  tout futur guichet : **un achat se réinitialise avec la monnaie qui l'a payé**. Écarté : tout remettre à
+  zéro (perte sèche de Renommée non regagnable, contredit EXG-54) ; tout conserver (le prestige ne
+  réinitialise plus rien de la chaîne de DPS, contredit l'intention d'ADR-2 et d'ADR-8).
+- **ADR-17** (2026-09-21) — La durée réelle d'un run est exigée **stable ou croissante à 10 % près**
+  (aucun run ne dure moins de 90 % du précédent ; plancher 2 h, plafond 24 h) au lieu de **croissante**.
+  La tolérance est explicite plutôt qu'implicite : « non décroissante » au sens strict serait à son tour
+  inatteignable, la durée oscillant de quelques pour cent d'un run au suivant selon l'ordre des achats. Raison : le simulateur
+  (T-14) démontre que la croissance est un point fixe du design, pas un réglage. La durée d'un run vaut
+  `D = patience × g/(g−1)`, où `g` est le facteur de croissance du temps par zone ; les multiplicateurs de
+  méta-progression déplacent la **zone atteinte**, pas la durée, donc `D` ne dépend pas du numéro de run.
+  Mesure : 2,38 h → 2,88 h sur 28 runs, pente ×0,9991 ; 18 designs alternatifs rejoués par le script
+  donnent des pentes de ×0,985 à ×1,007. La seule politique qui fait croître les durées (prestiger au
+  doublement du stock d'Éclats) les projette à 260-270 h par run, hors du plafond de 24 h, et réduit la
+  partie à 2-5 runs. L'**objectif** de la contrainte est néanmoins atteint avec une large marge : elle
+  avait été écrite pour garantir ≥ 40 h sans mur ni répétition ennuyeuse (trou bloquant #1 du challenge
+  v2), et la mesure donne **72,28 h**. Écarté : ajouter au moteur une source de croissance progressive
+  (paliers d'école à seuils illimités) — coût réel (types, schéma de sauvegarde, recherche complète à
+  refaire) pour satisfaire la lettre d'un mécanisme dont l'objectif est déjà dépassé, avec un risque de
+  débordement mesuré sur ce terrain précis (porter le nombre de pistes d'amélioration de 2 à 3 projette la
+  valeur maximale à 1,6e308, contre 5,22e173 aujourd'hui). Écarté aussi : assouplir en silence dans le
+  simulateur — la dérogation est archivée dans `src/donnees/` sous `CONTRAINTES_NON_TENUES`, avec garde
+  anti-péremption (un rouge non listé échoue, un vert encore listé échoue également). Rallonger le jeu plus
+  tard ne demande pas de code : adoucir `g` (de 1,21 à 1,10 double presque `D`), monter le couple vers
+  5 × 6 = 30, ou étaler le contenu par zone — trois leviers d'une seule passe `equilibrage:search`.
 
 ## 16. Livraison par vagues
 
@@ -641,7 +705,7 @@ graphique — et le déploiement Pages fonctionnel dès la fin de vague (preview
 | T-7 | Ascension + arbre de Points d'Ascension + déblocage 6e école à la 1re | EXG-20, 21, 40, 41 | implémenteur-domaine | Opus | `tests/domain/ascension.test.ts` vert, incluant arbre d'Ascension (6-10 nœuds, ≥ 1 répétable), déblocage École de Lumière, et remise à zéro des Éclats possédés + des nœuds de l'arbre d'Éclats à l'Ascension (EXG-20) `[complété par le challenger v2]` |
 | T-8 | Améliorations (or) et équipement (renommée) comme multiplicateurs de dégâts | EXG-10, 42, 43 | implémenteur-domaine | Opus | `tests/domain/ameliorations.test.ts` et `tests/domain/equipement.test.ts` verts, `mult_améliorations`/`mult_équipement` branchés à la chaîne DPS §8 |
 | T-9 | Quêtes/Renommée (crédit de quête sur jalon), succès fusionnés aux quêtes | EXG-10, 54 | implémenteur-domaine | Sonnet | `tests/domain/quetes.test.ts` vert : aucune entité « succès » séparée, 3 types de jalons couverts (zone atteinte, monstres tués, 1er prestige), non-répétabilité vérifiée (rejouer le jalon ne crédite pas deux fois) `[complété par le challenger v2]` |
-| T-10 | Sauvegarde : sérialisation, version, migration no-op v1, export/import base64, validation par schéma, `sauvegarde.bak`, anti-XSS | EXG-22, 24 à 27, 45 à 47 | implémenteur-domaine | Opus | `tests/domain/sauvegarde.test.ts` vert, incluant fixtures malveillantes (Infinity, `__proto__`, négatif) rejetées et restauration `.bak` |
+| T-10 | Sauvegarde : sérialisation, version, migration no-op v1, export/import base64, validation par schéma, `sauvegarde.bak`, anti-XSS | EXG-24 à 27, 45 à 47 (EXG-22 déplacée en T-23, `[corrigé par la revue de vague 1]`) | implémenteur-domaine | Opus | `tests/domain/sauvegarde.test.ts` vert, incluant fixtures malveillantes (Infinity, `__proto__`, négatif) rejetées et restauration `.bak` |
 | T-11 | Verrou multi-onglet (`BroadcastChannel` + heartbeat) | EXG-48 | implémenteur-domaine | Sonnet | Test de verrou vert (simulation de deux instances, une seule écrit) |
 | T-12 | Notation des grands nombres | EXG-36, 37 | implémenteur-domaine | Sonnet | `tests/domain/notation.test.ts` vert |
 | T-13 | Condition de fin + boss final (domaine), lit `N_ASCENSIONS_REQUISES`/`PRESTIGES_PAR_ASCENSION` depuis `src/donnees/` — **s'exécute après T-15** malgré la numérotation `[complété par le challenger v2]` | EXG-28, 44 | implémenteur-domaine | Opus | `tests/domain/fin.test.ts` vert : `partie_terminee=true` après `ascensions ≥ N_ASCENSIONS_REQUISES` (lu depuis `donnees/`) et boss final vaincu dans sa zone dédiée (EXG-28), prestige/Ascension refusés ensuite |
@@ -700,7 +764,7 @@ scripts/verify.sh` vert en CI.
 | 1 | T-2, T-18 | 19 | T-6, T-23 | 37 | T-12 |
 | 2 | T-2 | 20 | T-7, T-23 | 38 | T-6 |
 | 3 | T-2, T-14 | 21 | T-6, T-7, T-23 | 39 | T-6 |
-| 4 | T-2, T-14, T-23 | 22 | T-10 | 40 | T-7 |
+| 4 | T-2, T-14, T-23 | 22 | T-23 | 40 | T-7 |
 | 5 | T-2 | 23 | T-23 | 41 | T-7 |
 | 6 | T-3 | 24 | T-10, T-28 | 42 | T-8 |
 | 7 | T-3 | 25 | T-10 | 43 | T-8, T-26 |
