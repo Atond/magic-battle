@@ -52,7 +52,10 @@ break_infinity tant que le simulateur ne dépasse pas 1e300. Français partout :
 - Rules par chemin : `.claude/rules/domaine-pur.md`, `.claude/rules/donnees-simulateur.md`.
 - Agents : `implementeur-domaine` (opus), `equilibrage` (opus, skill `atelier:idle-balance`),
   `revue-lecture-seule` (opus, lecture seule) ; `implementeur-ui` (sonnet, vague 2), `narrateur` (sonnet, vague 3).
-- Points d'entrée : `/ship`, `/equilibrer` (posés dès que `build` et `equilibrage:search` existent).
-- Skills projet à venir : `sauvegarde-migration`, `ajouter-ecole-sort`, `ajouter-zone-monstres`.
+- Points d'entrée : `/ship` (`.claude/skills/ship/`), `/equilibrer` (`.claude/skills/equilibrer/`) — posés.
+- Skills projet posés : `preuve-du-rouge` — à dérouler avant de déclarer fait tout garde-fou (test, étape
+  de `verify.sh`, grep d'invariant) : injecter la faute, constater le rouge, choisir le bon instrument.
+- Skills projet à venir : `sauvegarde-migration` (au 1er champ obligatoire ajouté à l'état, pas avant),
+  `ajouter-ecole-sort`, `ajouter-zone-monstres`.
 - Skills externes réutilisés : `atelier:idle-balance`, `vercel:shadcn`, `vercel:react-best-practices`.
 - MCP : `context7` seul (docs Vite / Tailwind 4 / shadcn / Zustand).
