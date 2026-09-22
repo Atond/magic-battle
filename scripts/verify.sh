@@ -17,7 +17,8 @@
 # npm disparu du `package.json` produirait IGNORÉ → sortie 0 → « vert ». Le mode strict est donc réservé
 # à la CI, et n'y est branché qu'une fois toutes les étapes réellement présentes (T-16).
 set -uo pipefail
-cd "$(dirname "$0")/.." || exit 0
+# Un garde-fou ne sort jamais 0 sur un chemin d'échec : un `cd` raté passerait pour « vert ».
+cd "$(dirname "$0")/.." || { echo "verify.sh : impossible d'atteindre la racine du dépôt." >&2; exit 2; }
 
 strict=0
 for argument in "$@"; do
@@ -56,7 +57,23 @@ echo "=== verify.sh — idlev1 ==="
 
 # --- (p) pureté du moteur : toujours actif dès que src/domain existe ---
 if [ -d src/domain ]; then
-  impurs="$(grep -rEn "from ['\"](react|react-dom|zustand)|\b(window|document|localStorage|sessionStorage|requestAnimationFrame|navigator)\b" src/domain --include='*.ts' --include='*.tsx' 2>/dev/null || true)"
+  # Trois familles, toutes signalées par la revue de fin de vague 1 comme des trous du motif d'origine :
+  #  · imports interdits — pas seulement la forme `from '…'` : un `import 'zustand/vanilla'` (effet de
+  #    bord), un `await import('react')` ou un `require('react')` passaient ;
+  #  · accès au navigateur ou au stockage, `BroadcastChannel` compris (c'est nommément l'API d'EXG-48,
+  #    et sa place est dans `src/state/`, pas dans le moteur) ;
+  #  · lecture d'horloge ou hasard — le trou le plus facile à creuser par inadvertance et le plus cher :
+  #    il rend le moteur non reproductible, donc le simulateur non comparable. Tout horodatage est un
+  #    paramètre (EXG-49).
+  interdits="(react|react-dom|zustand)"
+  plateforme="window|document|localStorage|sessionStorage|requestAnimationFrame|navigator|globalThis|self|indexedDB|caches|fetch|XMLHttpRequest|BroadcastChannel|crypto|atob|btoa|process"
+  horloge="Date\.now|performance\.now|new Date|Math\.random"
+  impurs="$(grep -rEn "(from|import|require)[[:space:]]*\(?['\"]$interdits|\b($plateforme)\b|\b($horloge)\b" src/domain --include='*.ts' --include='*.tsx' 2>/dev/null | grep -vE ':[[:space:]]*(//|\*|/\*)' || true)"
+  # L'autre moitié de l'invariant 2 : le moteur reçoit ses valeurs en paramètre, il ne les importe pas.
+  # Un `import { CONSTANTES } from '../donnees/…'` dans `src/domain/` détruirait la testabilité en
+  # isolation sans qu'aucune autre étape ne le voie.
+  fuites="$(grep -rEn "from ['\"][^'\"]*(donnees|state|components|canvas)/" src/domain --include='*.ts' --include='*.tsx' 2>/dev/null || true)"
+  impurs="$(printf '%s\n%s' "$impurs" "$fuites" | grep -v '^$' || true)"
   if [ -n "$impurs" ]; then
     echo "$impurs"; echec "pureté src/domain/ (import react/zustand ou accès DOM interdit — spec §9)"
   else ok "pureté src/domain/"; fi
@@ -66,7 +83,9 @@ fi
 
 # --- (g) aucune graine d'équilibrage dans src/ : toujours actif dès que src existe ---
 if [ -d src ]; then
-  graines="$(grep -rEn "à valider|graine|TODO équilibrage" src --include='*.ts' --include='*.tsx' 2>/dev/null || true)"
+  # Insensible à la casse (« Graine », « À VALIDER » passaient) et étendu au JSON : `src/donnees/`
+  # pourrait un jour porter du contenu en `.json`, que le motif d'origine ne lisait pas.
+  graines="$(grep -rEniI "à valider|graine|TODO équilibrage" src --include='*.ts' --include='*.tsx' --include='*.json' 2>/dev/null || true)"
   if [ -n "$graines" ]; then
     echo "$graines"; echec "graines d'équilibrage dans src/ (les valeurs viennent du rapport idle-balance — ADR-10)"
   else ok "aucune graine dans src/"; fi
