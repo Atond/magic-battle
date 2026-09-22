@@ -41,3 +41,17 @@
   monotone d'une exécution à l'autre — une passe ne peut plus rendre le jeu moins bon qu'il ne l'était.
 - **Corollaire de méthode :** quand une contrainte régresse après une passe de recherche, la question
   n'est pas « quelle constante a bougé » mais « comment cette contrainte était-elle pesée ».
+
+## LRN-004 — La question n'est pas « ce garde-fou est-il vert ? » mais « quelle faute ne verrait-il pas ? » (2026-09-22)
+- **Issu de :** [[BLK-004]]
+- **Ce qu'on retient :** un vérificateur vert rassure à proportion de ce qu'on croit qu'il couvre. Avant
+  de s'y fier, écrire noir sur blanc la faute **la plus probable** qu'il laisserait passer — ici « une
+  valeur retouchée à la main qui reste dans les clous », c'est-à-dire exactement la retouche qu'un agent
+  pressé ferait. Si cette faute existe, il manque un second vérificateur, d'une **nature différente** :
+  `check` mesure un comportement (les contraintes §8 tiennent-elles ?), `empreinte` compare à une origine
+  (le fichier est-il la sortie du vecteur archivé ?). Deux vérificateurs de même nature ne se couvrent pas
+  l'un l'autre, ils se répètent.
+- **Corollaire :** une doctrine appliquée là où elle a fait mal n'est pas une doctrine. [[LRN-002]] était
+  née du combat et avait été appliquée au combat et à la sauvegarde — pas au tick, pas à l'équilibrage,
+  où les mêmes compteurs auto-attribués et les mêmes garde-fous jamais vus rougir ont survécu. Quand un
+  apprentissage est écrit, passer explicitement en revue tous les endroits qui présentent le même motif.

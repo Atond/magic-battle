@@ -44,3 +44,15 @@
   descente **multi-départ** qui relit les vecteurs archivés, ce qui rend la recherche monotone d'une
   exécution à l'autre. Résultat : 13/13, C07 à 91,0 %, zéro dérogation. Le seuil de 90 % n'a pas
   bougé. → [[LRN-003]]
+
+## BLK-004 — une porte de qualité verte pour la mauvaise raison — Résolu (2026-09-22)
+- **Contexte :** revue de fin de vague 1. `equilibrage:check` tournait à chaque fin de tour d'agent et
+  affichait 13/13, ce qui donnait le sentiment que `src/donnees/` était sous contrôle.
+- **Cause :** `check` rejoue les contraintes §8. Il n'attrape donc une constante retouchée à la main que
+  si cette retouche **casse** une contrainte. Démontré et non supposé : passer `fin.zoneBossFinal` de
+  1000 à 1001 laisse `check` à 13/13 et en sortie 0. L'invariant 2 de `CLAUDE.md` reposait sur la parole
+  des agents dans un projet qui vérifie tout le reste par grep et par script. Même famille de trou pour
+  le mécanisme anti-péremption des dérogations, exercé dans aucun des deux sens.
+- **Résolution :** `npm run equilibrage:empreinte` — régénération en mémoire depuis le vecteur archivé et
+  comparaison champ par champ, 0,2 s, huitième étape de `verify.sh` ; plus 20 tests Vitest sur les deux
+  sens des dérogations et les clés orphelines. → [[LRN-004]]
