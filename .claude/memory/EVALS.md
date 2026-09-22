@@ -40,6 +40,13 @@
 ## EVAL-003 — Porte de qualité (2026-09-20)
 - **Mesure :** `bash scripts/verify.sh` vert (pureté domain/, aucune graine dans src/, typecheck, lint, test,
   equilibrage:check, build).
-- **Valeur actuelle (2026-09-21, lot A vague 1) :** vert — pureté OK, aucune valeur d'amorçage dans src/,
-  typecheck OK, lint OK, 43 tests / 4 fichiers, build OK ; `equilibrage:check` encore ignoré (script npm
-  absent jusqu'à T-14).
+- **Valeur actuelle (2026-09-22, fin de vague 1) :** vert sur **8 étapes** — pureté `src/domain/`, aucune
+  valeur d'amorçage dans `src/`, typecheck, lint, **368 tests**, `equilibrage:check` (13/13, 3,9 s),
+  `equilibrage:empreinte` (0,2 s), build. Durée totale ~9,4 s.
+- **Vert en CI confirmé le 2026-09-22** (PR #1, `pull_request`, runner propre, `npm ci`) : c'est la
+  première exécution du mode `--strict` hors poste local, et le point bloquant de la revue de fin de
+  vague. Le job de déploiement est bien resté ignoré hors de `main`.
+- **Ce que la porte attrape désormais et n'attrapait pas :** lecture d'horloge ou hasard dans le moteur,
+  imports à effet de bord ou dynamiques de react/zustand, import de `src/donnees/` ou `src/state/` depuis
+  `src/domain/`, marqueurs de chantier en majuscules, constante de `src/donnees/` retouchée à la main qui
+  resterait dans les clous. Les sept familles ont été vues rougir par injection.
