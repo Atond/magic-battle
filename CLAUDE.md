@@ -23,6 +23,9 @@ break_infinity tant que le simulateur ne dépasse pas 1e300. Français partout :
 5. **Hors périmètre, ne jamais proposer** : multijoueur, classements, monétisation, comptes/cloud, app native,
    i18n V1, PWA V1 (spec §3.2).
 6. **Ton des textes** : familier, jeux de mots, drôle, jamais « style IA » (spec §7 guide de ton).
+7. **Fichiers engendrés, jamais édités à la main** : `src/donnees/constantes.ts` (simulateur) et les
+   composants shadcn (`src/components/ui/`, `src/lib/utils.ts`). Ces derniers gardent leur nom amont
+   malgré le « français partout » (ADR-18) ; renommer casse `npx shadcn add`.
 
 ## Comment on travaille ici
 - Vagues séquentielles (spec §16) ; chaque tâche a un test nommé comme critère de done.
