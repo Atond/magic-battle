@@ -36,7 +36,8 @@ break_infinity tant que le simulateur ne dépasse pas 1e300. Français partout :
 
 ## Commandes
 `npm run dev` · `npm run build` · `npm run typecheck` · `npm run lint` · `npm test` ·
-`npm run equilibrage:check` (< 10 s, dans verify) · `npm run equilibrage:search` (recherche complète, manuel) ·
+`npm run equilibrage:check` (< 10 s, dans verify) · `npm run equilibrage:empreinte` (< 1 s, dans verify :
+`src/donnees/` = sortie du vecteur archivé) · `npm run equilibrage:search` (recherche complète, manuel) ·
 `bash scripts/verify.sh` (porte de qualité) · `/ship` · `/equilibrer`.
 
 ## Spec & mémoire
