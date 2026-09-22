@@ -1,13 +1,23 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 5 — 2026-09-21 —
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 6 — 2026-09-22 —
 > corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
 > `challenge-v2.md`) ; v4 ajoute ADR-16, v5 ajoute ADR-17 et ferme la dernière question ouverte de §14.
-> Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21.
+> Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21. La v6 corrige
+> une erreur d'attribution de tâche relevée par la revue de fin de vague 1 (EXG-22/23), sans toucher aux
+> exigences elles-mêmes.
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v5 (2026-09-22)
+Correction d'attribution relevée par la **revue de fin de vague 1**. T-10 (§16) revendiquait EXG-22
+(auto-sauvegarde toutes les 30 s), et §12 rangeait EXG-22/23 dans la ligne `tests/domain/sauvegarde.test.ts`
+— alors qu'aucun test ne peut les prouver depuis `src/domain/`, qui n'a par construction aucun accès au
+stockage ni à l'horloge. Le moteur n'en porte que la constante d'intervalle. Les deux exigences passent
+donc explicitement à **T-23** (vague 2), où le stockage est réellement branché. Aucun code concerné,
+aucune exigence modifiée : c'est la table qui laissait croire à une couverture inexistante.
 
 ## Changements depuis v4 (2026-09-21)
 Deux ajouts, tous deux issus du rapport `tools/idle-balance/rapports/2026-09-21.md` (T-14) :
@@ -527,7 +537,9 @@ Toute migration de sauvegarde est accompagnée d'une fixture dans `tests/migrati
 | EXG-15 à EXG-17 (zones/boss) | `tests/domain/zones.test.ts` |
 | EXG-18 à EXG-21, EXG-38 à EXG-41 (prestige/ascension, arbres, 6e école) | `tests/domain/prestige.test.ts`, `tests/domain/ascension.test.ts` |
 | EXG-42, EXG-43 (améliorations/équipement, multiplicateurs) | `tests/domain/ameliorations.test.ts`, `tests/domain/equipement.test.ts` |
-| EXG-22 à EXG-27, EXG-45 à EXG-48 (sauvegarde, sécurité import, verrou) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
+| EXG-24 à EXG-27, EXG-45 à EXG-47 (sauvegarde, sécurité import) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
+| EXG-22, EXG-23 (auto-sauvegarde 30 s, sauvegarde événementielle) | **vague 2, T-23** : indémontrables depuis `domain/`, qui n'a accès ni au stockage ni à l'horloge ; le moteur n'en porte que la constante d'intervalle et la politique `.bak` `[corrigé par la revue de vague 1]` |
+| EXG-48 (verrou multi-onglet) | politique pure : `tests/domain/verrou.test.ts` ; transport `BroadcastChannel` et preuve « seul le premier onglet écrit » : vague 2, T-23 |
 | EXG-28, EXG-44 (fin de partie) | `tests/domain/fin.test.ts`, test d'intégration UI (vague 3) |
 | EXG-29, EXG-30, EXG-52 (performance/rendu) | test `canvas/`, revue de code (aucune boucle O(n) par frame), mesure de frame CI |
 | EXG-31 à EXG-35, EXG-50, EXG-51 (accessibilité/responsive) | audit outillé (axe-core), test clavier, test visuel 375/1440 px, mesure cibles tactiles |
@@ -693,7 +705,7 @@ graphique — et le déploiement Pages fonctionnel dès la fin de vague (preview
 | T-7 | Ascension + arbre de Points d'Ascension + déblocage 6e école à la 1re | EXG-20, 21, 40, 41 | implémenteur-domaine | Opus | `tests/domain/ascension.test.ts` vert, incluant arbre d'Ascension (6-10 nœuds, ≥ 1 répétable), déblocage École de Lumière, et remise à zéro des Éclats possédés + des nœuds de l'arbre d'Éclats à l'Ascension (EXG-20) `[complété par le challenger v2]` |
 | T-8 | Améliorations (or) et équipement (renommée) comme multiplicateurs de dégâts | EXG-10, 42, 43 | implémenteur-domaine | Opus | `tests/domain/ameliorations.test.ts` et `tests/domain/equipement.test.ts` verts, `mult_améliorations`/`mult_équipement` branchés à la chaîne DPS §8 |
 | T-9 | Quêtes/Renommée (crédit de quête sur jalon), succès fusionnés aux quêtes | EXG-10, 54 | implémenteur-domaine | Sonnet | `tests/domain/quetes.test.ts` vert : aucune entité « succès » séparée, 3 types de jalons couverts (zone atteinte, monstres tués, 1er prestige), non-répétabilité vérifiée (rejouer le jalon ne crédite pas deux fois) `[complété par le challenger v2]` |
-| T-10 | Sauvegarde : sérialisation, version, migration no-op v1, export/import base64, validation par schéma, `sauvegarde.bak`, anti-XSS | EXG-22, 24 à 27, 45 à 47 | implémenteur-domaine | Opus | `tests/domain/sauvegarde.test.ts` vert, incluant fixtures malveillantes (Infinity, `__proto__`, négatif) rejetées et restauration `.bak` |
+| T-10 | Sauvegarde : sérialisation, version, migration no-op v1, export/import base64, validation par schéma, `sauvegarde.bak`, anti-XSS | EXG-24 à 27, 45 à 47 (EXG-22 déplacée en T-23, `[corrigé par la revue de vague 1]`) | implémenteur-domaine | Opus | `tests/domain/sauvegarde.test.ts` vert, incluant fixtures malveillantes (Infinity, `__proto__`, négatif) rejetées et restauration `.bak` |
 | T-11 | Verrou multi-onglet (`BroadcastChannel` + heartbeat) | EXG-48 | implémenteur-domaine | Sonnet | Test de verrou vert (simulation de deux instances, une seule écrit) |
 | T-12 | Notation des grands nombres | EXG-36, 37 | implémenteur-domaine | Sonnet | `tests/domain/notation.test.ts` vert |
 | T-13 | Condition de fin + boss final (domaine), lit `N_ASCENSIONS_REQUISES`/`PRESTIGES_PAR_ASCENSION` depuis `src/donnees/` — **s'exécute après T-15** malgré la numérotation `[complété par le challenger v2]` | EXG-28, 44 | implémenteur-domaine | Opus | `tests/domain/fin.test.ts` vert : `partie_terminee=true` après `ascensions ≥ N_ASCENSIONS_REQUISES` (lu depuis `donnees/`) et boss final vaincu dans sa zone dédiée (EXG-28), prestige/Ascension refusés ensuite |
@@ -752,7 +764,7 @@ scripts/verify.sh` vert en CI.
 | 1 | T-2, T-18 | 19 | T-6, T-23 | 37 | T-12 |
 | 2 | T-2 | 20 | T-7, T-23 | 38 | T-6 |
 | 3 | T-2, T-14 | 21 | T-6, T-7, T-23 | 39 | T-6 |
-| 4 | T-2, T-14, T-23 | 22 | T-10 | 40 | T-7 |
+| 4 | T-2, T-14, T-23 | 22 | T-23 | 40 | T-7 |
 | 5 | T-2 | 23 | T-23 | 41 | T-7 |
 | 6 | T-3 | 24 | T-10, T-28 | 42 | T-8 |
 | 7 | T-3 | 25 | T-10 | 43 | T-8, T-26 |
