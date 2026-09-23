@@ -43,7 +43,8 @@ import { acheterAmelioration } from '../domain/ameliorations/index.ts'
 import { acheterEquipement } from '../domain/equipement/index.ts'
 import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
 import { prestiger, sommeBornee } from '../domain/prestige/index.ts'
-import { ascensionner } from '../domain/ascension/index.ts'
+import { acheterNoeudAscension, ascensionner } from '../domain/ascension/index.ts'
+import { entrerZoneFinale } from '../domain/fin/index.ts'
 import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
 import {
@@ -99,6 +100,11 @@ export interface ActionsStoreJeu {
   readonly acheterEquipement: (id: string) => void
   /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde. */
   readonly acheterNoeudEclats: (id: string) => void
+  /** EXG-40 — achète un rang de l'arbre d'Ascension (Points d'Ascension), même garde. */
+  readonly acheterNoeudAscension: (id: string) => void
+  /** EXG-28 — entre dans la zone du boss final (`entrerZoneFinale`), même garde. Le seuil
+   *  d'Ascensions et la fin de partie sont tenus par le domaine : un refus laisse l'état intact. */
+  readonly entrerZoneFinale: () => void
   /**
    * EXG-19 / EXG-21 — étape 2 du prestige : applique `prestiger` (`src/domain/prestige/index.ts`). Même
    * garde que `clic` (aucun effet hors mode `actif`, donc pas en lecture seule).
@@ -331,6 +337,8 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
         acheterAmelioration: (id) => jouer((etat) => acheterAmelioration(etat, id, CONSTANTES).etat),
         acheterEquipement: (id) => jouer((etat) => acheterEquipement(etat, id, CONSTANTES).etat),
         acheterNoeudEclats: (id) => jouer((etat) => acheterNoeudArbre(etat, id, 1, 'eclats', CONSTANTES).etat),
+        acheterNoeudAscension: (id) => jouer((etat) => acheterNoeudAscension(etat, id, 1, CONSTANTES).etat),
+        entrerZoneFinale: () => jouer((etat) => entrerZoneFinale(etat, CONSTANTES).etat),
         prestige: (gainFige) =>
           jouer((etat) => {
             const resultat = prestiger(etat, CONSTANTES)

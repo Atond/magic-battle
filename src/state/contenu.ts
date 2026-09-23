@@ -62,7 +62,17 @@ export function nomCible(cible: Monstre | Boss | null, zone: number, vague: numb
   return monstres[rang % monstres.length]!
 }
 
+/**
+ * EXG-28 — le combat du boss final vit hors d'`EtatCombat` (`EtatJeu.bossFinal`, voir l'en-tête de
+ * `src/domain/fin/index.ts`) : `combat.cible` garde le monstre de la progression ordinaire pendant ce
+ * temps. L'écran montre le boss final dès que ce champ existe, quelle que soit la cible de progression.
+ */
+export function enCombatFinal(etat: EtatJeu): boolean {
+  return etat.bossFinal !== undefined
+}
+
 /** Sélecteur prêt à l'emploi (rend une primitive, `src/state/hooks.ts`). */
 export function nomCibleCourante(etat: EtatJeu): string {
+  if (enCombatFinal(etat)) return TEXTES_FIN.bossFinal.nom
   return nomCible(etat.combat.cible, etat.combat.zone, etat.combat.vague)
 }

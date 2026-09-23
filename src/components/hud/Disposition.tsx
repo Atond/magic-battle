@@ -1,9 +1,11 @@
 // Disposition HUD (T-19, spec §7 « disposition »). Bascule CSS pure entre deux mises en page — pas de
 // JS de détection de largeur (`matchMedia` reste réservé à `prefers-reduced-motion`, EXG-29/EXG-50) :
 //   - desktop (≥ 1024 px, `lg:`) : 3 colonnes — écoles | combat + sorts | améliorations/équipement/
-//     arbre d'Éclats/prestige — sous le bandeau haut ;
+//     arbre d'Éclats/prestige/arbre d'Ascension — sous le bandeau haut ;
 //   - mobile (< 1024 px) : combat + sorts fixes en haut, onglets Écoles / Améliorations / Prestige
-//     dessous (le regroupement « Améliorations » couvre améliorations + équipement + arbre d'Éclats).
+//     dessous (le regroupement « Améliorations » couvre améliorations + équipement + arbre d'Éclats ;
+//     l'onglet « Prestige » porte prestige, Ascension et l'arbre d'Ascension, qui se paie en Points
+//     d'Ascension gagnés juste au-dessus).
 //
 // Les deux arborescences existent toutes les deux dans le DOM ; seule celle qui correspond à la largeur
 // réelle est visible (`hidden`/`lg:hidden` → `display: none`), donc absente des requêtes de rôle et des
@@ -22,6 +24,7 @@ import { EncartNarration } from './EncartNarration.tsx'
 import { EncartStockagePlein } from './EncartStockagePlein.tsx'
 import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
+import { PanneauArbreAscension } from './PanneauArbreAscension.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
 import { PanneauCentral } from './PanneauCentral.tsx'
 import { PanneauEcoles } from './PanneauEcoles.tsx'
@@ -67,6 +70,7 @@ function DispositionDesktop({ store }: { readonly store: StoreJeuApi }) {
       <div className="flex flex-col gap-2 overflow-y-auto">
         <ColonneAchats store={store} />
         <PanneauPrestige store={store} />
+        <PanneauArbreAscension store={store} />
       </div>
     </div>
   )
@@ -95,7 +99,12 @@ function DispositionMobile({ store }: { readonly store: StoreJeuApi }) {
       <div role="tabpanel" className="flex flex-col gap-2">
         {onglet === 'ecoles' && <PanneauEcoles store={store} />}
         {onglet === 'ameliorations' && <ColonneAchats store={store} />}
-        {onglet === 'prestige' && <PanneauPrestige store={store} />}
+        {onglet === 'prestige' && (
+          <>
+            <PanneauPrestige store={store} />
+            <PanneauArbreAscension store={store} />
+          </>
+        )}
       </div>
     </div>
   )

@@ -8,22 +8,28 @@ import { BarreSorts } from './BarreSorts.tsx'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
-import { indexRegion, regionParIndex } from '../../state/contenu.ts'
+import { enCombatFinal, indexRegion, regionParIndex } from '../../state/contenu.ts'
+import { TEXTES_FIN } from '../../donnees/fin.ts'
+import { EncartZoneFinale } from './EncartZoneFinale.tsx'
 
 export function PanneauCentral({ store }: { readonly store: StoreJeuApi }) {
   const clic = useStoreJeu(store, (s) => s.actions.clic)
   const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
   // Primitive : ne re-rend qu'au passage d'une région à l'autre, jamais au tick.
   const region = regionParIndex(useStoreJeu(store, (s) => indexRegion(s.etat.combat.zone)))
+  // EXG-28 — pendant le combat final, l'en-tête nomme la zone dédiée, pas la région de progression.
+  const combatFinal = useStoreJeu(store, (s) => enCombatFinal(s.etat))
+  const lieu = combatFinal ? TEXTES_FIN.zoneFinale : { nom: region.nom, description: region.ambiance }
 
   return (
     <section aria-label={TEXTES_UI.combat.titre} className="flex flex-col gap-2 p-2">
       <div className="px-1">
         <p className="text-sm font-semibold text-[var(--couleur-charbon-texte)]" data-testid="nom-region">
-          {region.nom}
+          {lieu.nom}
         </p>
-        <p className="text-xs text-[var(--couleur-charbon-texte-attenue)]">{region.ambiance}</p>
+        <p className="text-xs text-[var(--couleur-charbon-texte-attenue)]">{lieu.description}</p>
       </div>
+      <EncartZoneFinale store={store} />
       <CanvasCombat store={store} />
       <button
         type="button"

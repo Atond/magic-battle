@@ -6,7 +6,9 @@
 import { expect } from 'vitest'
 import axe from 'axe-core'
 
+import { ascensionner } from '../../src/domain/ascension/index.ts'
 import { etatInitial } from '../../src/domain/moteur.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import type { EtatJeu } from '../../src/domain/types.ts'
 import { creerStoreJeu } from '../../src/state/store.ts'
 import type { StoreJeuApi } from '../../src/state/store.ts'
@@ -45,6 +47,30 @@ export function creerStoreDeTest(options: {
   })
   confirmerDemarrage(planificateur)
   return store
+}
+
+/**
+ * `n` Ascensions faites par le moteur (`ascensionner`) à partir d'une nouvelle partie — jamais un
+ * `ascensionsEffectuees` posé à la main. `extra` écrase ensuite des champs choisis par le test.
+ */
+export function apresAscensions(n: number, extra: (etat: EtatJeu) => Partial<EtatJeu> = () => ({})) {
+  return (horodatageMs: number): EtatJeu => {
+    let etat = etatInitial(horodatageMs)
+    for (let i = 0; i < n; i += 1) {
+      const pret: EtatJeu = {
+        ...etat,
+        prestige: {
+          ...etat.prestige,
+          prestigesDuCycle: CONSTANTES.ascension.prestigesParAscension,
+          eclatsCumulesAVie: Math.max(etat.prestige.eclatsCumulesAVie, 100),
+        },
+      }
+      const resultat = ascensionner(pret, CONSTANTES)
+      expect(resultat.accepte, `Ascension ${i + 1}`).toBe(true)
+      etat = resultat.etat
+    }
+    return { ...etat, ...extra(etat) }
+  }
 }
 
 /** Parmi les doublons desktop/mobile (`Disposition` monte les deux arbres), l'élément réellement affiché. */

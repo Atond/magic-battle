@@ -83,6 +83,29 @@ export const TEXTES_UI = {
     verrouille: 'Prérequis manquant',
   },
 
+  arbreAscension: {
+    titre: 'Arbre d’Ascension',
+    sousTitre: 'Permanent. Ce que tu prends ici, aucune Ascension ne te le reprend.',
+    // Le solde vit dans ce panneau, pas dans le bandeau : ces points ne bougent qu'à l'Ascension et ne
+    // se dépensent qu'ici.
+    solde: (points: string) => `Points d’Ascension : ${points}`,
+    acheter: (cout: string) => `Investir · ${cout} pt${cout === '1' ? '' : 's'}`,
+    rangSur: (rang: number, max: number) => `Rang ${rang} / ${max}`,
+    rangSansFin: (rang: number) => `Rang ${rang} · sans plafond`,
+    rangMax: 'Rang maximal atteint',
+    verrouille: 'Prérequis manquant',
+    prerequis: (noms: string) => `Il faut d’abord : ${noms}`,
+  },
+
+  zoneFinale: {
+    // Nom et description de la zone et du boss : `TEXTES_FIN` (`fin.ts`). Ici, l'habillage de l'encart.
+    titre: 'Zone finale',
+    ouverte: 'Tu es monté assez haut : une porte s’est ouverte au fond du couloir.',
+    boss: 'Derrière la porte',
+    chrono: (secondes: number) => `${secondes} s pour le battre. Raté ? Tu reviens quand tu veux, sans rien perdre.`,
+    entrer: 'Entrer dans le bureau',
+  },
+
   quetes: {
     titre: 'Quêtes',
     sousTitre: 'Chacune paie sa Renommée une fois. Pas deux, on a vérifié.',

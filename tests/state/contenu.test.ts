@@ -6,7 +6,16 @@ import { describe, expect, it } from 'vitest'
 import type { Boss, Monstre } from '../../src/domain/types.ts'
 import { TEXTES_FIN } from '../../src/donnees/fin.ts'
 import { TEXTES_REGIONS } from '../../src/donnees/zones.ts'
-import { ZONES_PAR_REGION, estZoneDeGardien, indexRegion, nomCible, regionDeZone } from '../../src/state/contenu.ts'
+import { etatInitial } from '../../src/domain/moteur.ts'
+import {
+  ZONES_PAR_REGION,
+  enCombatFinal,
+  estZoneDeGardien,
+  indexRegion,
+  nomCible,
+  nomCibleCourante,
+  regionDeZone,
+} from '../../src/state/contenu.ts'
 
 const MONSTRE: Monstre = { nom: '', pvMax: 10, pvCourants: 10, orAuMeurtre: 1 }
 const boss = (zone: number, estFinal = false): Boss => ({ ...MONSTRE, zone, estBoss: true, estFinal })
@@ -58,5 +67,17 @@ describe('nom de la cible', () => {
 
   it('aucune cible : chaîne vide', () => {
     expect(nomCible(null, 1, 1)).toBe('')
+  })
+})
+
+describe('EXG-28 — combat final : il vit dans `EtatJeu.bossFinal`, pas dans `combat.cible`', () => {
+  it('dès que `bossFinal` existe, la cible affichée est le boss final, même si `combat.cible` est un monstre', () => {
+    const base = etatInitial(0)
+    expect(enCombatFinal(base)).toBe(false)
+    expect(nomCibleCourante(base)).not.toBe(TEXTES_FIN.bossFinal.nom)
+
+    const enCombat = { ...base, bossFinal: { pvCourants: 1, timerRestantMs: 1 } }
+    expect(enCombatFinal(enCombat)).toBe(true)
+    expect(nomCibleCourante(enCombat)).toBe(TEXTES_FIN.bossFinal.nom)
   })
 })

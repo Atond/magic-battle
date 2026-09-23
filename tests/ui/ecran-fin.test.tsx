@@ -5,8 +5,9 @@
 // `partieTerminee`/`statistiquesFin`.
 //
 // Limite assumée (voir le rapport de vague 3) : le combat final n'est pas encore branché dans la boucle
-// du moteur (`tick`/`appliquerClic`/`lancerSort` n'appellent jamais `avancerBossFinal`) et l'UI n'offre
-// donc pas d'entrée dans la zone finale. Ce test couvre tout ce qui suit la victoire.
+// du moteur (`tick`/`appliquerClic`/`lancerSort` n'appellent jamais `avancerBossFinal`). L'entrée dans la
+// zone finale depuis l'UI est couverte par `tests/ui/zone-finale.test.tsx` ; ce test couvre tout ce qui
+// suit la victoire.
 
 import { describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'

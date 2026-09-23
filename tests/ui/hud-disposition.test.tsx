@@ -6,10 +6,12 @@
 //     débordement horizontal, la pile mobile (onglets) est absente de l'arbre accessible ;
 //  2. mobile (375 px) — pile verticale (combat au-dessus des onglets), 3 onglets Écoles / Améliorations /
 //     Prestige, aucun débordement horizontal, la grille desktop est absente de l'arbre accessible ;
-//  3. dans les deux mises en page, chaque cible interactive visible mesure au moins 24×24 px.
+//  3. dans les deux mises en page, chaque cible interactive visible mesure au moins 24×24 px ;
+//  4. vague 3 — même contrôle (cibles ≥ 24 px, aucun débordement) une fois l'arbre d'Ascension et
+//     l'encart de zone finale affichés, aux deux largeurs.
 
 import { describe, expect, it } from 'vitest'
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { render } from '@testing-library/react'
 
 // Ce projet ne charge pas de `setupFiles` (voir `vite.config.ts`, projet `ui`) : l'auto-cleanup de
@@ -35,6 +37,9 @@ import {
   creerStockageFactice,
 } from '../state/doubles.ts'
 import { creerStoreJeu } from '../../src/state/store.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
+import { TEXTES_UI } from '../../src/donnees/textes-ui.ts'
+import { apresAscensions, creerStoreDeTest as creerStoreAvecEtat } from './aide-audit.ts'
 
 const T0 = 1_700_000_000_000
 
@@ -139,4 +144,36 @@ describe('disposition HUD — 3 colonnes desktop / pile + onglets mobile (spec �
       store.arreter()
     }
   })
+
+  it.each([1440, 375] as const)(
+    '%i px, arbre d’Ascension et encart de zone finale affichés : cibles ≥ 24 px, aucun débordement',
+    async (largeur) => {
+      await page.viewport(largeur, largeur === 1440 ? 900 : 800)
+      const store = creerStoreAvecEtat({
+        etatInitialFn: apresAscensions(CONSTANTES.fin.nAscensionsRequises, (etat) => ({
+          bourse: { ...etat.bourse, pointsAscension: 3 },
+        })),
+      })
+      const { getAllByRole, getByRole, queryAllByRole, unmount } = render(<Disposition store={store} />)
+      try {
+        const encart = getByRole('region', { name: TEXTES_UI.zoneFinale.titre })
+        if (largeur < 1024) await userEvent.click(getByRole('tab', { name: TEXTES_UI.onglets.prestige }))
+        const arbre = getByRole('region', { name: TEXTES_UI.arbreAscension.titre })
+
+        // Toutes les cibles visibles, pas seulement celles des deux nouveaux éléments (piège 10).
+        const cibles = [...getAllByRole('button'), ...queryAllByRole('tab')]
+        expect(cibles.some((c) => encart.contains(c))).toBe(true)
+        expect(cibles.some((c) => arbre.contains(c))).toBe(true)
+        for (const cible of cibles) {
+          const rect = cible.getBoundingClientRect()
+          expect(rect.width, `largeur de « ${cible.textContent} » à ${largeur}px`).toBeGreaterThanOrEqual(24)
+          expect(rect.height, `hauteur de « ${cible.textContent} » à ${largeur}px`).toBeGreaterThanOrEqual(24)
+        }
+        sansDebordementHorizontal()
+      } finally {
+        unmount()
+        store.arreter()
+      }
+    },
+  )
 })
