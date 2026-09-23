@@ -1,15 +1,57 @@
 # Spec — idlev1 (jeu idle web, magicien vs monstres)
 
-> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 7 — 2026-09-22 —
+> Source de vérité du projet, destinée à des agents LLM autant qu'à des humains. Version 10 — 2026-09-23, **validée par l'utilisateur le 2026-09-23** —
 > corps **validé par l'utilisateur le 2026-09-20** (v3) après deux tours de challenge (`challenge-v1.md`,
 > `challenge-v2.md`) ; v4 ajoute ADR-16, v5 ajoute ADR-17 et ferme la dernière question ouverte de §14.
 > Les deux sont issus de la mesure en vague 1 et validés par l'utilisateur le 2026-09-21. La v6 corrige
 > une erreur d'attribution de tâche relevée par la revue de fin de vague 1 (EXG-22/23), sans toucher aux
-> exigences elles-mêmes ; la v7 ajoute ADR-18 (nommage des fichiers engendrés par un outil tiers).
+> exigences elles-mêmes ; la v7 ajoute ADR-18 (nommage des fichiers engendrés par un outil tiers) ; la v8
+> tranche les décisions techniques et d'apparence laissées ouvertes pour la vague 2 (store, outillage de
+> test UI, palette, disposition, réglages) et corrige trois écarts relevés sans nouvelle question ; la v9
+> ferme les 15 trous du challenge de la v8 (deux bloquants tranchés par l'utilisateur, treize majeurs
+> intégrés) et scinde T-23 ; la v10 ferme les 10 trous du challenge de la v9 (un bloquant tranché par
+> l'utilisateur, huit majeurs et mineurs intégrés), réordonne la vague 2 (T-22 après T-23b) et corrige les
+> calculs de §11/§12.
 > Issue de `docs/specs/projet/interview.md` et de `docs/specs/projet/challenge-v2.md`. Toute modification =
 > nouvelle version datée.
 > Règles d'écriture : phrases courtes ; une exigence = un identifiant ; tout ce qui est testable est écrit
 > pour être testé ; les décisions disent pourquoi et ce qui a été écarté ; pas d'adjectif sans mesure.
+
+## Changements depuis v9 (2026-09-23)
+Base : `docs/specs/projet/challenge-v9.md` (10 trous, statut des 15 trous v8 : fermés #2, 5, 7, 8, 10, 12, 14 ;
+partiellement fermés #1, 3, 4, 6, 9, 11, 13, 15) et `docs/specs/2026-09-23-vague-2-ui/interview.md`
+§« Complément après challenge de la v9 ». Un bloquant tranché par l'utilisateur : **EXG-55** étendue (N2 —
+tout delta de frame supérieur au seuil de rattrapage part vers `calculHorsLigne`, onglet caché ou non, pas de
+nouvelle EXG). Huit trous majeurs/mineurs intégrés, marqués `[complété par le challenger v9]` : suspension du
+tick/sauvegarde sur `hidden` (N1, EXG-55/T-23a) ; rejeu complet du démarrage à toute acquisition de verrou
+hors 1er démarrage, gel sans `calculHorsLigne` sur perte (N3, EXG-48/T-23a) ; deux tests de relais + délai
+d'expiration chiffré (N4, T-23a) ; ports `page`/`planificateur` dans la fabrique (N5, T-18) ; exception
+`.bak` sur principal illisible (N6, EXG-46) ; définition de « écriture », préfixe vérifié, fixtures
+`reglages` hostiles (N7, §12/T-23a) ; T-18 = fabrique + contrat typé, T-23a = implémentation, T-22 déplacée
+après T-23b (N8, §16) ; seuil unique `nTicksMax × PAS_TICK_MS` partout (N10, EXG-55/§8). Restes des trous v8
+fermés : #11 (assertion de chevauchement des rectangles avant clic, T-23b) ; #13 (critère déterministe pour
+EXG-30). Corrections sans renumérotage : §11 (13 × 150k + 18 × 60k ≈ 3,0 M tokens), §12 (aucun chemin de
+saut des tests navigateur). Détail complet dans les deux fichiers sources, non recopié ici.
+
+## Changements depuis v8 (2026-09-23)
+Base : `docs/specs/projet/challenge-v8.md` (15 trous) et `docs/specs/2026-09-23-vague-2-ui/interview.md`
+§« Complément après challenge de la v8 ». Deux bloquants tranchés par l'utilisateur : **EXG-55** ajoutée
+(onglet caché > 60 s traité comme hors-ligne, #1) ; **EXG-48** précisée (onglet secondaire figé + relais
+automatique par relecture du stockage, #2). **T-23** scindée en **T-23a** (persistance, verrou, ordre de
+démarrage — Opus forcé) et **T-23b** (confirmations, encart, bandeau — Sonnet), agent `implementeur-ui`
+créé en tête de vague 2 (#15). Treize trous majeurs intégrés dans les exigences et tâches concernées,
+marqués `[complété par le challenger v8]`. Détail complet dans les deux fichiers sources, non recopié ici.
+
+## Changements depuis v7 (2026-09-23)
+Base : `docs/specs/2026-09-23-vague-2-ui/interview.md`, décisions validées le 2026-09-23 pour la vague 2.
+Trois ADR ajoutés (§15) : **ADR-19** (store Zustand vanilla, tick hors React), **ADR-20** (outillage de
+test UI en navigateur : Vitest browser mode + Playwright Chromium + Testing Library + axe-core), **ADR-21**
+(réglages d'affichage dans une clé `localStorage` séparée, hors sauvegarde). §14 passe les lignes Palette et
+Store à résolu. §7 précise la disposition desktop/mobile et le rendu canvas procédural sans asset. §16
+ajoute **T-18a** (outillage de test UI) et complète les critères de done de T-18, T-22, T-23 ; §12 ajoute la
+vérification des tests UI navigateur. Corrections sans renumérotage : T-21 (agent `implémenteur-canvas` →
+`implementeur-ui`), EXG-4 (retire `[à valider]` sur H, qui est une sortie du simulateur), EXG-21 (la
+confirmation affiche le gain même nul). Détail complet dans l'interview, non recopié ici.
 
 ## Changements depuis v6 (2026-09-22)
 **ADR-18** (§15) tranche une contradiction relevée par la revue de fin de vague 1 : les fichiers engendrés
@@ -139,19 +181,20 @@ Les agents doivent refuser d'ajouter ces éléments sans une nouvelle décision 
 de cette spec).
 
 ## 4. Exigences (EARS)
-Format : `EXG-n` · type · énoncé · critère d'acceptation · priorité (P0/P1/P2). 54 exigences au total
-(EXG-1 à EXG-54) ; table de traçabilité EXG → tâche en fin de §16.
+Format : `EXG-n` · type · énoncé · critère d'acceptation · priorité (P0/P1/P2). 55 exigences au total
+(EXG-1 à EXG-55) ; table de traçabilité EXG → tâche en fin de §16.
 
 ### 4.1 Tick, delta-time, hors-ligne
 | ID | Type | Énoncé | Critère d'acceptation (testable) | P |
 | --- | --- | --- | --- | --- |
 | EXG-1 | Ubiquitaire | Le système doit faire progresser la simulation par pas fixes de 100 ms. | Test : 10 ticks de 100 ms produisent un état dont l'écart relatif avec un seul appel de 1000 ms est < 1e-9. `[complété par le challenger]` | P0 |
 | EXG-2 | Événementiel | Quand le delta-time entre deux frames dépasse 1 s, le système doit rattraper les ticks manquants sans re-render intermédiaire. | Test : delta = 5000 ms produit exactement l'état de 50 ticks successifs. | P0 |
-| EXG-3 | Indésirable | Si le nombre de ticks à rattraper dépasse un seuil N (valeur : `[à valider par simulation idle-balance]`, proposition 600), alors le système doit basculer sur un calcul en forme fermée pour la production passive. | Test : un delta de 2 h ne déclenche pas plus de N itérations, mesurées via un compteur `ticksRattrapes` exposé par le moteur. `[complété par le challenger]` | P0 |
-| EXG-4 | Événementiel | Quand le joueur revient après une absence, le système doit créditer la production hors-ligne des écoles (générateurs passifs), plafonnée à H heures (H ∈ [8, 12], valeur exacte `[à valider]`), et afficher un résumé (or gagné, temps écoulé, plafond atteint ou non). | Test : une absence simulée de 20 h ne crédite que la durée H ; le résumé affiche les 3 valeurs. | P0 |
+| EXG-3 | Indésirable | Si le nombre de ticks à rattraper dépasse un seuil `nTicksMax` (sortie du simulateur, `src/donnees/constantes.ts` : 600 au rapport du 2026-09-21, seul seuil nommé pour tout rattrapage, cf. EXG-55), alors le système doit basculer sur un calcul en forme fermée pour la production passive. | Test : un delta de 2 h ne déclenche pas plus de `nTicksMax` itérations, mesurées via un compteur `ticksRattrapes` exposé par le moteur. `[complété par le challenger]` `[nommage unifié, complété par le challenger v9, N10]` | P0 |
+| EXG-4 | Événementiel | Quand le joueur revient après une absence, le système doit créditer la production hors-ligne des écoles (générateurs passifs), plafonnée à H heures (H ∈ [8, 12], valeur fixée par le simulateur et lue depuis `src/donnees/`, §8), et afficher un résumé (or gagné, temps écoulé, plafond atteint ou non). | Test : une absence simulée de 20 h ne crédite que la durée H ; le résumé affiche les 3 valeurs. | P0 |
 | EXG-5 | Ubiquitaire | Le système ne doit pas créditer le sort de clic ni les sorts actifs pendant le hors-ligne : seule la production passive des écoles compte. | Test : hors-ligne avec 0 niveau d'école ne rapporte aucun gain. | P1 |
 | EXG-49 | Ubiquitaire | Le système doit calculer l'écart hors-ligne comme `Δt = clamp(horodatage_actuel − dernier_horodatage_sauvegardé, 0, H)`, `dernier_horodatage_sauvegardé` étant persisté à chaque sauvegarde. | Test : horloge système reculée artificiellement → `Δt = 0`, aucun crédit négatif ni NaN. `[complété par le challenger]` | P0 |
 | EXG-53 | Ubiquitaire | Le résumé hors-ligne (EXG-4) doit s'afficher en encart non bloquant, fermable sans confirmation, qui n'intercepte aucune interaction de jeu pendant son affichage. | Test : le résumé affiché n'intercepte aucun clic destiné aux panneaux de jeu ; fermeture en un clic ou automatique après lecture. `[complété par le challenger]` | P1 |
+| EXG-55 | Événementiel | Quand un delta de frame dépasse le seuil de rattrapage `nTicksMax × PAS_TICK_MS` (EXG-3, sortie du simulateur, `src/donnees/` ; 60 s avec les constantes actuelles), le système doit traiter cet écart comme une absence hors-ligne (EXG-4 : plafond H, production passive, résumé), créditée une seule fois, puis remettre à zéro sa référence de temps — que l'onglet ait changé de visibilité ou non (fermé, caché, ou veille système sans `visibilitychange`). `[bloquant #1, tranché par l'utilisateur, challenge v8]` Pendant que l'onglet est `hidden`, le tick, la sauvegarde et l'auto-sauvegarde sont suspendus et seul le battement du verrou (EXG-48) continue ; l'écart mesuré au retour se calcule hors `derniereSauvegardeMs` (comparaison d'horloge dédiée, pas la date de dernière écriture). `[complété par le challenger v9, N1/N2/N10]` | Test : onglet caché 20 h puis revenu visible → crédit plafonné à H, un seul crédit, aucune écriture pendant l'absence (pas de double comptage avec l'auto-sauvegarde ou un second `visibilitychange`). Test : delta de 8 h sans `visibilitychange` (veille système) → même traitement, crédit plafonné à H une seule fois. Test : 10 frames après un retour sous le seuil → jeu normal, aucun passage par `calculHorsLigne`. `[complété par le challenger v9]` | P0 |
 
 ### 4.2 Monnaies, générateurs, déblocage
 | ID | Type | Énoncé | Critère d'acceptation | P |
@@ -184,7 +227,7 @@ Format : `EXG-n` · type · énoncé · critère d'acceptation · priorité (P0/
 | EXG-18 | Ubiquitaire | Le système doit calculer les Éclats gagnés au prestige comme une fonction croissante de la zone maximale atteinte durant le run (formule §8). | Test : Éclats(zone_max=10) < Éclats(zone_max=20), formule vérifiée sur 3 valeurs. | P0 |
 | EXG-19 | Événementiel | Quand le joueur confirme un prestige, le système doit réinitialiser zone/or/niveaux d'écoles du run courant et créditer les Éclats calculés. | Test : prestige confirmé → zone=1, or=0, niveaux=0, Éclats totaux augmentés du montant calculé. | P0 |
 | EXG-20 | Événementiel | Quand le joueur confirme une Ascension (disponible après 5-8 prestiges, fourchette tranchée en interview, valeur exacte fixée par le simulateur), le système doit remettre à zéro les Éclats possédés ET tous les nœuds de l'arbre d'Éclats (EXG-39), laisser intacts les nœuds de l'arbre d'Ascension (EXG-40), et créditer des Points d'Ascension dépensables dans l'arbre d'Ascension. `[complété par le challenger v2]` | Test : Ascension confirmée → Éclats possédés=0, tous les nœuds de l'arbre d'Éclats reviennent à rang 0, nœuds de l'arbre d'Ascension inchangés, Points d'Ascension crédités selon la formule §8. | P1 |
-| EXG-21 | Ubiquitaire | Le système doit exiger une confirmation à deux étapes avant toute réinitialisation irréversible (prestige, Ascension). | Test : un prestige annulé au premier écran ne modifie aucun état. | P0 |
+| EXG-21 | Ubiquitaire | Le système doit exiger une confirmation à deux étapes avant toute réinitialisation irréversible (prestige, Ascension) ; le second écran affiche le gain calculé (Éclats pour un prestige, Points d'Ascension pour une Ascension), même quand la formule le rend nul. `[complété par l'interview vague 2]` | Test : un prestige annulé au premier écran ne modifie aucun état. Test : un prestige déclenché sous la zone 4 (la formule y rend 0 Éclat) affiche une confirmation à « 0 Éclat », pas un écran vide ni une erreur. | P0 |
 | EXG-38 | Ubiquitaire | Le système doit appliquer aux dégâts globaux un bonus passif fonction des Éclats possédés du cycle d'Ascension en cours, de forme `(1 + B × Éclats_possédés)^β` (ou forme multiplicative équivalente, constantes/exposant `B`/`β` issus du simulateur, §8) ; ce bonus est remis à son état zéro Éclat à chaque Ascension, avec les Éclats possédés (EXG-20). `[complété par le challenger, trou #1] [complété par le challenger v2]` | Test : dégâts avec 10 Éclats possédés vs 0 Éclat suivent la formule `(1 + B × Éclats)^β` archivée par le simulateur (T-14) ; après une Ascension, le bonus retombe à son état zéro Éclat. | P0 |
 | EXG-39 | Ubiquitaire | Le système doit proposer, pour le cycle d'Ascension en cours, un arbre de dépense des Éclats de 8 à 12 nœuds à coût croissant (dégâts, or, zone de départ, cooldowns) dont au moins un nœud répétable à rangs infinis à coût croissant ; la dépense d'Éclats dans l'arbre est indépendante du solde d'Éclats possédés qui alimente le bonus passif (EXG-38) ; l'arbre entier est remis à zéro à chaque Ascension (EXG-20). `[complété par le challenger, trou #1] [complété par le challenger v2]` | Test : l'achat d'un nœud décrémente le solde dépensable sans réduire le compte total d'Éclats possédés utilisé par EXG-38 ; le nœud répétable reste achetable indéfiniment à coût croissant ; après une Ascension, tous les nœuds reviennent à rang 0. | P0 |
 | EXG-40 | Ubiquitaire | Le système doit proposer un arbre de Points d'Ascension **permanent** (jamais réinitialisé) de 6 à 10 nœuds (auto-cast des sorts, synergies entre écoles, bonus de départ de run) dont au moins un nœud répétable à rangs infinis à coût croissant, alimenté par les Points calculés en §8. `[complété par le challenger, trou #1] [complété par le challenger v2]` | Test : l'achat d'un nœud d'auto-cast déclenche le sort correspondant automatiquement au tick suivant, sans clic ni frappe ; le nombre total de nœuds est compris entre 6 et 10, dont au moins un répétable. | P1 |
@@ -206,9 +249,9 @@ Format : `EXG-n` · type · énoncé · critère d'acceptation · priorité (P0/
 | EXG-26 | Événementiel | Quand une sauvegarde d'une version de schéma antérieure est chargée, le système doit appliquer les migrations successives sans perte de progression avant de continuer. | Test : une fixture de sauvegarde v1 migrée vers la version courante conserve or/niveaux/Éclats connus. | P0 |
 | EXG-27 | Indésirable | Si une sauvegarde est corrompue ou illisible, alors le système doit le signaler clairement et proposer une nouvelle partie sans écraser silencieusement la donnée existante avant confirmation. | Test : sauvegarde tronquée → message d'erreur, `localStorage` original intact tant que non confirmé. | P1 |
 | EXG-45 | Indésirable | Si un import de sauvegarde contient une valeur non finie (NaN/Infinity), un champ positif reçu négatif, une valeur hors des bornes déclarées du schéma, ou une clé non reconnue (`__proto__`, `constructor`, `prototype` ou absente du schéma), alors le système doit rejeter l'import, ignorer les clés inconnues plutôt que les fusionner, et afficher un message d'erreur explicite. | Test : fixtures d'import avec `Infinity`, clé `__proto__`, champ négatif → import refusé, état courant intact. `[complété par le challenger, trou #4]` | P0 |
-| EXG-46 | Ubiquitaire | Avant tout import ou toute nouvelle partie qui écraserait une sauvegarde existante, le système doit copier la sauvegarde courante dans `sauvegarde.bak`, restaurable en un clic. | Test : import réussi puis clic « restaurer » recharge l'état d'avant import à l'identique. `[complété par le challenger, trou #4]` | P0 |
+| EXG-46 | Ubiquitaire | Avant tout import ou toute nouvelle partie qui écraserait une sauvegarde existante **lisible**, le système doit copier la sauvegarde courante dans `sauvegarde.bak`, restaurable en un clic. Exception : si le principal est illisible (`OptionsImport.contenuCourant: null`), aucune copie n'est faite — un `.bak` valide n'est jamais écrasé par un principal corrompu ; l'écran d'erreur EXG-27 propose « restaurer » seulement si `restaurerSecours` réussit. `[complété par le challenger, trou #4]` `[complété par le challenger v9, N6]` | Test : import réussi puis clic « restaurer » recharge l'état d'avant import à l'identique. Test : principal tronqué à l'ouverture → `.bak` existant inchangé octet pour octet, aucune écriture de `.bak` ; bouton « restaurer » visible seulement si `restaurerSecours` réussit. `[complété par le challenger v9, N6]` | P0 |
 | EXG-47 | Ubiquitaire | Le système ne doit jamais injecter un champ de sauvegarde (texte importé, futur nom personnalisé) dans le DOM comme HTML brut. | Revue de code : aucun `dangerouslySetInnerHTML`/`innerHTML` avec une donnée issue de la sauvegarde ; test avec charge `<img src=x onerror=...>` dans un champ texte → rendu échappé, aucun script exécuté. `[complété par le challenger, trou #4]` | P0 |
-| EXG-48 | Événementiel | Quand un deuxième onglet du jeu s'ouvre, le système doit détecter l'onglet déjà actif (verrou par `BroadcastChannel` ou clé `owner` + heartbeat) et placer les onglets secondaires en lecture seule avec un message visible. | Test : deux onglets ouverts → seul le premier écrit `localStorage`, le second affiche le message et ne sauvegarde pas. `[complété par le challenger, trou #5]` | P1 |
+| EXG-48 | Événementiel | Quand un deuxième onglet du jeu s'ouvre, le système doit détecter l'onglet déjà actif (verrou par `BroadcastChannel` ou clé `owner` + heartbeat) et placer les onglets secondaires en lecture seule : tick arrêté, canvas arrêté, actions désactivées, bandeau visible. Quand le verrou se libère (fermeture propre du principal) ou expire (délai chiffré dans le code, > 60 s, `[complété par le challenger v9, N4]`), l'onglet secondaire doit reprendre la main automatiquement en rejouant le démarrage complet depuis le stockage (jamais l'état en mémoire, potentiellement périmé) : `importerTexte` du principal (branche EXG-27 comprise si le principal est illisible) puis `calculHorsLigne` avant de redémarrer sa propre boucle. Toute acquisition de verrou autre que le tout premier démarrage de l'application suit cette même branche de rejeu complet ; toute perte de verrou détectée sans acquisition (ex. `pageshow` depuis le bfcache avec un état périmé) fige l'onglet sans appeler `calculHorsLigne`. `[complété par le challenger, trou #5] [bloquant #2, tranché par l'utilisateur, challenge v8] [complété par le challenger v9, N3]` | Test : deux onglets ouverts → seul le premier écrit `localStorage`, le second affiche le bandeau, ne tick pas, ne dessine pas le canvas, actions désactivées. Test : fermeture propre du premier onglet → relais immédiat, le second relit le principal depuis le stockage, applique le hors-ligne, démarre sa propre boucle. Test : disparition du premier onglet sans fermeture propre (crash, perte réseau du heartbeat) → le second reste figé jusqu'à `expiration − 1 ms`, puis relaie. Test `pageshow` (retour depuis le bfcache) : l'onglet rejoue le démarrage complet plutôt que de réutiliser l'état en mémoire. Test principal tronqué au moment du relais : l'onglet secondaire fige, n'appelle pas `calculHorsLigne`, affiche EXG-27. `[complété par le challenger, trou #5] [complété par le challenger v9, N3/N4]` | P1 |
 
 ### 4.8 Fin de partie
 | ID | Type | Énoncé | Critère d'acceptation | P |
@@ -220,8 +263,8 @@ Format : `EXG-n` · type · énoncé · critère d'acceptation · priorité (P0/
 | ID | Type | Énoncé | Critère d'acceptation | P |
 | --- | --- | --- | --- | --- |
 | EXG-29 | Optionnel | Si l'option « performance » est activée, alors le système doit cesser de dessiner les projectiles et impacts sur le canvas tout en conservant les dégâts calculés. | Test : option ON → aucun appel de dessin de projectile, DPS mesuré inchangé. | P1 |
-| EXG-30 | Ubiquitaire | Le système ne doit exécuter aucune boucle de complexité proportionnelle à l'historique de jeu à chaque frame de rendu. | Test de durée : sur une session simulée de 2 h, le temps d'exécution par frame mesuré a un écart < 10 % entre début et fin de session. `[complété par le challenger, trou #13]` | P1 |
-| EXG-52 | Ubiquitaire | Le système doit plafonner le nombre de projectiles actifs simultanés à `N_PROJECTILES_MAX = 200` (constante de rendu, propriété de T-21, §8), avec dégradation silencieuse (suppression des plus anciens) au-delà, et viser un budget de rendu ≤ 4 ms par frame pour le canvas de combat. `[complété par le challenger, trou #14] [complété par le challenger v2]` | Test : critère déterministe — scénario à production saturée → appels de dessin de projectile par frame ≤ `N_PROJECTILES_MAX` (200) ; le temps de frame mesuré en ms reste informatif, non bloquant en CI (instabilité machine connue). | P1 |
+| EXG-30 | Ubiquitaire | Le système ne doit exécuter aucune boucle de complexité proportionnelle à l'historique de jeu à chaque frame de rendu. | Test déterministe (pas de chronométrage, instable en CI, cf. EXG-52) : après 2 h de jeu simulées, le nombre de structures parcourues par le rendu à chaque frame reste borné par `N_PROJECTILES_MAX`, indépendamment de la durée écoulée depuis le début de la session. `[complété par le challenger, trou #13]` `[complété par le challenger v9, #13]` | P1 |
+| EXG-52 | Ubiquitaire | Le système doit plafonner le nombre de projectiles actifs simultanés à `N_PROJECTILES_MAX = 200` (constante de rendu, propriété de T-21, `src/canvas/`, §8), avec dégradation silencieuse (suppression des plus anciens) au-delà, et viser un budget de rendu ≤ 4 ms par frame pour le canvas de combat. Le moteur `domain/` n'émet aucun événement « projectile » : le canvas dérive ses effets des écarts de compteurs de jeu (dégâts infligés, monstres tués) entre deux frames. `[complété par le challenger, trou #14] [complété par le challenger v2] [complété par le challenger v8, trou #13]` | Test : critère déterministe — scénario forçant plus de 200 écarts de compteur sur une frame → demandes de dessin > 200, dessins effectifs ≤ `N_PROJECTILES_MAX` (200), les plus anciens supprimés en premier. Le temps de frame mesuré en ms reste informatif, non bloquant en CI (instabilité machine connue). | P1 |
 
 ### 4.10 Accessibilité & responsive
 | ID | Type | Énoncé | Critère d'acceptation | P |
@@ -288,7 +331,16 @@ référence) ; sombre, fantasy sobre ; jamais d'écran qui bloque la boucle (nar
 hors-ligne non bloquant EXG-53).
 
 **Bibliothèque** : Tailwind CSS 4 + shadcn/ui. **Langue** : français seul en V1, clés i18n-ready (pas de
-texte en dur hors fichiers de contenu `src/donnees/`).
+texte en dur hors fichiers de contenu `src/donnees/`). Note : `npm run equilibrage:empreinte` ne compare que
+`src/donnees/constantes.ts` (§12) — un fichier de textes d'UI ajouté sous `src/donnees/` (ex. `donnees/textes-ui.ts`)
+n'est donc pas couvert par cette commande ; seule la revue lecture seule et `grep` manuel en attestent.
+
+**Disposition (tranchée en interview vague 2, 2026-09-23)** : desktop (1440 px) en 3 colonnes — écoles à
+gauche, combat + barre de sorts au centre, améliorations/équipement/arbre d'Éclats/prestige à droite — avec
+un bandeau haut pour les monnaies et la zone courante. Mobile (375 px) : combat + barre de sorts fixes en
+haut, onglets Écoles / Améliorations / Prestige dessous. Canvas de combat en rendu **procédural
+géométrique** (silhouettes, particules, traînées colorées par école) : aucun asset graphique en V1, des
+sprites pourront remplacer ce rendu sans toucher au moteur.
 
 **Heuristiques de Nielsen à surveiller** : visibilité de l'état du système (cooldowns, compteurs or/
 renommée/Éclats toujours visibles) ; prévention des erreurs (confirmation à deux étapes avant tout reset
@@ -373,7 +425,9 @@ simulateur, pas seulement `B`/`β` `[complété par le challenger v2]`.
 - `H` : plafond hors-ligne en heures, `H ∈ [8, 12]` (EXG-4/EXG-49), valeur fixée par T-14.
   `[complété par le challenger v2]`
 - `N_PROJECTILES_MAX = 200` : plafond de projectiles actifs simultanés (EXG-52), constante de rendu propriété
-  de T-21 — **pas** une sortie du simulateur d'équilibrage. `[complété par le challenger v2]`
+  de T-21 — **pas** une sortie du simulateur d'équilibrage, déclarée dans `src/canvas/` et non dans
+  `src/donnees/` (elle ne vient d'aucun rapport `idle-balance`, `equilibrage:empreinte` ne la vérifie pas).
+  `[complété par le challenger v2] [complété par le challenger v8, trou #13]`
 
 ### Formules
 - Dégâts au clic : `D_clic = base_clic × (1 + Σ bonus_améliorations)`, `base_clic = 1` `[à valider]`.
@@ -428,7 +482,7 @@ contraintes et produit un rapport chiffré ; ce rapport fixe aussi les constante
 
 ### Budget de calcul
 Coût du tick constant (indépendant du nombre de ticks écoulés) ; aucune boucle O(n) sur l'historique de
-jeu par frame (EXG-30) ; forme fermée obligatoire pour le hors-ligne au-delà du seuil N (EXG-3) ; entiers
+jeu par frame (EXG-30) ; forme fermée obligatoire pour le hors-ligne au-delà du seuil `nTicksMax` (EXG-3) ; entiers
 JS natifs (`number`) tant que < 10³⁰⁰, arrondis d'affichage à 2-3 chiffres significatifs en notation
 abrégée ; budget de rendu ≤ 4 ms/frame et plafond `N_PROJECTILES_MAX = 200` sur le canvas (EXG-52).
 
@@ -439,7 +493,7 @@ abrégée ; budget de rendu ≤ 4 ms/frame et plafond `N_PROJECTILES_MAX = 200` 
 | UI | React | 19 | Imposé par l'interview | — |
 | Langage | TypeScript | 5.x strict | Convention `nylnatosport`, sécurité des formules de jeu | JavaScript seul (pas de garde-fou sur les types de jeu) |
 | Styles | Tailwind CSS + shadcn/ui | 4.x | Imposé par l'interview, dense et rapide à composer | CSS modules maison (plus lent à produire) |
-| Pont état / React | Store dédié (type Zustand) | à fixer en vague 2 | Le tick à 100 ms doit éviter un re-render global à chaque pas ; souscriptions sélectives nécessaires | Context + `useReducer` naïf (re-render global à chaque tick) ; Redux (boilerplate disproportionné pour ce périmètre) |
+| Pont état / React | Zustand 5 en store vanilla (`createStore`) | ADR-19 | Le tick à 100 ms doit éviter un re-render global à chaque pas ; souscriptions sélectives nécessaires | Context + `useReducer` naïf (re-render global à chaque tick) ; Redux (boilerplate disproportionné pour ce périmètre) |
 | Rendu combat | Canvas 2D natif | — | Suffit pour projectiles/impacts, cohérent avec la référence (HTML5 simple) | PixiJS/Phaser (poids et complexité disproportionnés pour V1) |
 | Validation d'entrée | `zod` (ou équivalent) | à fixer T-9 vague 1 | Schéma déclaratif pour valider l'import de sauvegarde (EXG-45), rejette clés inconnues et valeurs hors bornes | Validation manuelle ad hoc (plus sujette à oubli, moins lisible, risque de prototype pollution) |
 | Tests | Vitest | convention `nylnatosport` | Rapide, déjà standard du thème 7 | Jest (redondant avec la convention) |
@@ -513,16 +567,30 @@ Toute migration de sauvegarde est accompagnée d'une fixture dans `tests/migrati
   « Fable » (mentionné en interview) reste **à justifier par écrit** avant tout usage — pas de valeur par
   défaut. `CLAUDE_CODE_SUBAGENT_MODEL` proposé : Opus pour les rôles `implémenteur-domaine` (tâches à
   formule) et `équilibrage-simulateur`, Sonnet pour les autres rôles.
+- **Extension vague 2** (challenge v8, trou #15) : la règle « Opus pour la sauvegarde » couvre l'intégrité
+  et la sécurité de l'import quelle que soit la couche qui les porte, pas seulement `src/domain/sauvegarde/`.
+  `implementeur-domaine` n'écrit jamais dans `src/state/` (§9) ; la tâche qui branche réellement la
+  persistance, le verrou multi-onglet et l'ordre de démarrage (**T-23a**) est donc confiée à
+  `implementeur-ui`, avec le **modèle Opus forcé** pour cette tâche précise — erreurs coûteuses à corriger
+  après coup, même logique que pour `domain/sauvegarde`. Le reste de `src/state/` (T-18, T-19… T-23b) reste
+  Sonnet.
 
 ### Estimation de coût du chantier (ordre de grandeur, hypothèses posées) `[complété par le challenger, trou #12]`
-- 29 tâches au total (§16) : 12 Opus, 17 Sonnet. Hypothèse : ~150k tokens en moyenne par tâche Opus
-  (domaine/formules/sauvegarde/simulateur, itérations incluses), ~60k tokens par tâche Sonnet (UI, contenu,
-  CI, logique mécanique), tarifs standard de la plateforme Claude.
-- Opus : 12 × 150k ≈ 1,8 M tokens. Sonnet : 17 × 60k ≈ 1,0 M tokens. Total ≈ 2,8 M tokens sur le chantier
-  complet, hors itérations de correction post-revue (non comptées ici).
-- Ordre de grandeur dominé par les 12 tâches Opus (domaine, formules, sauvegarde, simulateur, revue
+- 32 tâches au total (§16, v10) : **13 Opus**, **18 Sonnet**, **1 sans modèle** (T-18-agent : tâche méta de
+  création de l'agent `implementeur-ui`, aucune exécution de modèle facturée). Hypothèse : ~150k tokens en
+  moyenne par tâche Opus (domaine/formules/sauvegarde/simulateur/revue, itérations incluses), ~60k tokens
+  par tâche Sonnet (UI, contenu, CI, logique mécanique), tarifs standard de la plateforme Claude.
+  `[complété par le challenger v9, N9]`
+- Opus : 13 × 150k ≈ 1,95 M tokens. Sonnet : 18 × 60k ≈ 1,08 M tokens. Total ≈ **3,0 M tokens** sur le
+  chantier complet, hors itérations de correction post-revue (non comptées ici). `[complété par le
+  challenger v9, N9]`
+- Ordre de grandeur dominé par les 13 tâches Opus (domaine, formules, sauvegarde, simulateur, T-23a, revue
   finale) — cohérent avec « capacité d'abord » ; à recaler après la vague 1 avec la consommation réelle
-  mesurée.
+  mesurée (pas encore fait : cette estimation n'a pas été révisée depuis la fin de la vague 1).
+- Vague 2 (challenge v8, trou #15) : **T-23a** bascule en Opus (persistance/verrou, cf. ci-dessus) — la
+  vague 2 compte donc un Opus de plus et un Sonnet de moins que dans un découpage naïf « toute l'UI en
+  Sonnet ». Le chiffrage ci-dessus (13 Opus / 18 Sonnet / 1 sans modèle, ≈ 3,0 M tokens) intègre déjà ce
+  basculement ; il devra être recalé avec la consommation mesurée en vague 1 et vague 2.
 
 ### MCP autorisés (≤ 5) `[complété par le challenger, trou #12]`
 - `context7` — documentation à jour Vite / React 19 / Tailwind 4 / shadcn/ui. Seul MCP nécessaire : le
@@ -535,18 +603,20 @@ Toute migration de sauvegarde est accompagnée d'une fixture dans `tests/migrati
 ## 12. Qualité & vérification
 | EXG | Preuve (test, commande, parcours) |
 | --- | --- |
-| EXG-1 à EXG-5, EXG-49, EXG-53 (tick, hors-ligne, Δt, résumé) | `tests/domain/tick.test.ts`, `tests/domain/hors-ligne.test.ts` ; test UI résumé non bloquant (vague 2) |
+| EXG-1 à EXG-5, EXG-49, EXG-53, EXG-55 (tick, hors-ligne, Δt, résumé, onglet caché) | `tests/domain/tick.test.ts`, `tests/domain/hors-ligne.test.ts` ; EXG-55 et EXG-53 : vague 2, T-23a (détection + crédit unique) / T-23b (encart `role="status"`) |
 | EXG-6 à EXG-10, EXG-54 (monnaies, générateurs, déblocage, quêtes) | `tests/domain/ecoles.test.ts`, `tests/domain/quetes.test.ts` |
 | EXG-11 à EXG-14 (sorts actifs) | `tests/domain/sorts.test.ts` + test clavier/tactile UI (vague 2) |
 | EXG-15 à EXG-17 (zones/boss) | `tests/domain/zones.test.ts` |
 | EXG-18 à EXG-21, EXG-38 à EXG-41 (prestige/ascension, arbres, 6e école) | `tests/domain/prestige.test.ts`, `tests/domain/ascension.test.ts` |
 | EXG-42, EXG-43 (améliorations/équipement, multiplicateurs) | `tests/domain/ameliorations.test.ts`, `tests/domain/equipement.test.ts` |
-| EXG-24 à EXG-27, EXG-45 à EXG-47 (sauvegarde, sécurité import) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
-| EXG-22, EXG-23 (auto-sauvegarde 30 s, sauvegarde événementielle) | **vague 2, T-23** : indémontrables depuis `domain/`, qui n'a accès ni au stockage ni à l'horloge ; le moteur n'en porte que la constante d'intervalle et la politique `.bak` `[corrigé par la revue de vague 1]` |
-| EXG-48 (verrou multi-onglet) | politique pure : `tests/domain/verrou.test.ts` ; transport `BroadcastChannel` et preuve « seul le premier onglet écrit » : vague 2, T-23 |
+| EXG-24 à EXG-26, EXG-45 (sauvegarde, sécurité import) | `tests/domain/sauvegarde.test.ts`, `tests/migrations/*.test.ts`, fixtures malveillantes |
+| EXG-27, EXG-46 (sauvegarde corrompue, `.bak`) | **vague 2, T-23a** : test navigateur — principal tronqué → message, `localStorage` identique octet pour octet après 31 s et `hidden` ; `.bak` valide jamais écrasé par un principal illisible ; « restaurer » recharge l'état d'avant import. `[complété par le challenger v8, trou #6]` |
+| EXG-47 (jamais de HTML brut depuis la sauvegarde) | `[complété par le challenger v8, trou #8]` rattachée à **T-19** : test navigateur (nom d'école/texte d'erreur hostile → rendu en texte littéral, aucun `<img>`, `window.__x` indéfini) + `grep -E 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML' src/` dans `scripts/verify.sh`, vu rouge une fois sur une injection volontaire avant d'être corrigé |
+| EXG-22, EXG-23 (auto-sauvegarde 30 s, sauvegarde événementielle) | **vague 2, T-23a** : indémontrables depuis `domain/`, qui n'a accès ni au stockage ni à l'horloge ; le moteur n'en porte que la constante d'intervalle et la politique `.bak` `[corrigé par la revue de vague 1]`. « Écriture » = un `setItem` sur la clé `magic-battle:sauvegarde` observé après la fin du démarrage (les écritures du démarrage lui-même — sauvegarde initiale, battements du verrou — ne comptent pas dans ce total). Preuve par comptage d'écritures : 0 écriture à 29,9 s, 1 à 31 s ; 0→1 sur `hidden` et sur `pagehide` ; 0 dans l'onglet secondaire ; toute clé écrite porte le préfixe `magic-battle:` ; fixtures `magic-battle:reglages` hostiles (JSON invalide, type inattendu) vues rouges avant validation (ADR-21). `[complété par le challenger v8, trou #4]` `[complété par le challenger v9, N7]` |
+| EXG-48 (verrou multi-onglet, onglet secondaire figé) | politique pure : `tests/domain/verrou.test.ts` ; transport `BroadcastChannel` et preuve « seul le premier onglet écrit » : vague 2, **T-23a** (détection, expiration, relais par relecture du stockage) et **T-23b** (bandeau, actions désactivées à l'écran). `[complété par le challenger v8, trou #5]` |
 | EXG-28, EXG-44 (fin de partie) | `tests/domain/fin.test.ts`, test d'intégration UI (vague 3) |
 | EXG-29, EXG-30, EXG-52 (performance/rendu) | test `canvas/`, revue de code (aucune boucle O(n) par frame), mesure de frame CI |
-| EXG-31 à EXG-35, EXG-50, EXG-51 (accessibilité/responsive) | audit outillé (axe-core), test clavier, test visuel 375/1440 px, mesure cibles tactiles |
+| EXG-31 à EXG-35, EXG-50, EXG-51 (accessibilité/responsive) | audit outillé (axe-core) sur la liste d'états auditée par T-22 (vide, chargement, erreur, succès, résumé hors-ligne, confirmation prestige/Ascension, bandeau lecture seule) : `violations = 0` **et** `incomplete` de la règle `color-contrast` = 0 (axe classe certains contrastes douteux en `incomplete`, pas en `violations` — un `incomplete` non nul laisse passer un vrai défaut) ; test clavier ; test visuel 375/1440 px avec assertions de mise en page, mesure de toutes les cibles tactiles. `[complété par le challenger v8, trou #12]` |
 | EXG-36, EXG-37 (notation) | `tests/domain/notation.test.ts`, sortie de `tools/idle-balance` |
 
 Commandes : `npm run build` · `npm run lint` · `npm run typecheck` · `npm test` (vitest) ·
@@ -558,6 +628,21 @@ dans `verify.sh` ni le hook Stop) · `bash scripts/verify.sh` (enchaîne build/l
 `equilibrage:check`, même politique « ignoré proprement si l'outillage manque » que `nylnatosport`). Porte
 de qualité : **hook Stop bloquant sur `equilibrage:check`**, oui, comme `nylnatosport`.
 `[complété par le challenger v2]`
+
+Tests UI en navigateur (ADR-20) : Vitest browser mode + Playwright (Chromium) + `@testing-library/react` +
+`axe-core`, exécutés dans `npm test` — c'est ce qui prouve les critères de T-18 à T-23b (renders, cibles
+24/44 px, clavier, contraste). jsdom écarté : pas de mise en page réelle, ces mesures n'y prouveraient rien
+(LRN-004). Conséquence : Chromium doit être disponible en CI, donc `.github/workflows/` est modifié — geste
+soumis à « Demander d'abord » (§10) au moment de le faire.
+
+L'absence de Chromium sur la machine est un **ÉCHEC** de `verify.sh`, `--strict` ou non — aucun chemin de
+saut des tests navigateur, jamais : la politique de tolérance à l'outillage absent (§9, comme
+`nylnatosport`) ne s'applique pas aux tests UI en navigateur une fois T-18a livré, et le mode non strict
+n'y fait pas exception. Un test qui ne peut pas s'exécuter n'est pas une preuve. En CI, le binaire Chromium
+est mis en cache entre exécutions (coût d'installation payé une fois). Le hook Stop qui bloque sur
+`verify.sh` (§12) porte un budget de temps explicite pour les tests navigateur : au-delà, le hook échoue
+plutôt que d'attendre indéfiniment — valeur du budget à fixer par T-18a en fonction du temps réel mesuré,
+non inventée ici. `[complété par le challenger v8, trou #15]` `[complété par le challenger v9, N9]`
 
 Revue lecture seule : un agent dédié relit, à chaque vague, la pureté de `domain/` (aucun import React),
 le workflow GitHub Actions (aucun secret exposé), la sécurité de l'import de sauvegarde (§6) et — vague 3 —
@@ -581,8 +666,8 @@ arbitrages stratégiques restant à trancher.
 | Risque / question | Impact | Plan B ou décision attendue | Qui tranche, quand |
 | --- | --- | --- | --- |
 | Noms définitifs des écoles/sorts/zones/boss/équipements | Le tableau §8 et le code utilisent des noms de travail (Feu, Glace…) | Rédaction du guide de ton et du contenu en vague 3 | Vague 3 |
-| Palette de contraste exacte (couleurs sombres + fantasy) | EXG-31 fixe le ratio, pas les couleurs | Choix de palette en vague 2, vérifiée par audit outillé | Vague 2 |
-| Store React définitif (Zustand ou équivalent) | ADR-6 propose Zustand sans l'avoir comparé à une alternative concrète en conditions réelles de tick 100 ms | Décision technique à la mise en œuvre de `state/`, documentée en ADR si un autre choix s'impose | Vague 2 |
+| ~~Palette de contraste exacte (couleurs sombres + fantasy)~~ **résolu** | — | Charbon neutre (thème shadcn `neutral` sombre) + un accent par école ; la couleur ne porte jamais seule une information (icône + libellé toujours associés) ; jetons CSS dans `src/index.css` ; deux vérificateurs de nature différente (LRN-004) : script de ratios sur les paires de jetons dans `verify.sh` et audit axe-core sur les écrans rendus | Tranché, vague 2 (interview 2026-09-23) |
+| ~~Store React définitif (Zustand ou équivalent)~~ **résolu** | — | Zustand en store vanilla (`createStore`), tick hors React, sélecteurs fins, canvas lisant `getState()` dans son rAF — ADR-19 | Tranché, vague 2 (interview 2026-09-23) |
 | ~~Seuil exact de mur (minutes) pour faire échouer `verify.sh`~~ **résolu** | — | 90 min sur le **blocage de progression** (aucune zone gagnée) ; le mur « aucun achat abordable » ne dépasse jamais 0,5 min et n'est pas la métrique utile. Rapport T-14 du 2026-09-21 | Tranché, vague 1 (T-14) |
 
 ## 15. Décisions (ADR)
@@ -699,6 +784,35 @@ arbitrages stratégiques restant à trancher.
   reste en français, y compris quand il importe ces fichiers. Écarté : renommer et maintenir une couche
   d'adaptation (coût permanent, bénéfice cosmétique) ; laisser la contradiction ouverte (la vague 2
   arbitrerait dans les deux sens selon le fichier, ce que la revue reprochait précisément).
+- **ADR-19** (2026-09-23) — Le store React (`state/`) est un store **Zustand vanilla** (`createStore`, pas
+  le hook React seul) : le tick tourne hors React, les composants souscrivent par sélecteurs fins, et le
+  canvas de combat lit l'état directement via `getState()` dans son propre `requestAnimationFrame`, sans
+  passer par un re-render React. Raison : c'était la question ouverte de §14 (ADR-6 proposait Zustand sans
+  l'avoir comparé en conditions réelles de tick 100 ms) ; le test de comptage de renders de T-18 (aucun
+  re-render global du HUD à chaque tick) est la preuve que ce choix tient. Écarté : un banc comparatif
+  formel avant de trancher (coût disproportionné pour une bibliothèque déjà choisie en ADR-6, seul le
+  patron d'utilisation restait ouvert) ; un store maison sur `useSyncExternalStore` (c'est exactement ce que
+  Zustand fait sous le capot — réécrire la même chose sans son écosystème de sélecteurs).
+- **ADR-20** (2026-09-23) — L'outillage de test UI est **Vitest en mode navigateur + Playwright (Chromium)
+  + `@testing-library/react` + `axe-core`** ; tous les tests d'interface (T-18 à T-23) tournent en vrai
+  navigateur. Raison : les critères de done de T-18 à T-23 portent sur des mesures de mise en page réelle
+  (cibles tactiles ≥ 24/44 px, comptage de renders, contraste, parcours clavier) — invérifiables sans mise
+  en page. Écarté : jsdom (pas de mise en page réelle, les mesures 24/44 px n'y prouveraient rien, LRN-004).
+  Conséquence assumée : Chromium doit tourner en CI, donc `.github/workflows/` est modifié — geste soumis à
+  « Demander d'abord » (§10) au moment de le faire, pas couvert par cet ADR.
+- **ADR-21** (2026-09-23) — Les réglages d'affichage (option « performance », EXG-29/EXG-50) vivent dans une
+  clé `localStorage` séparée `magic-battle:reglages`, **hors sauvegarde**, gérée par `src/state/`, validée à
+  la lecture (`try/catch`, seul le booléen `performance` est lu, jamais d'étalement d'objet non validé ; clé
+  absente ou invalide → suit la media query `prefers-reduced-motion`). Toutes les clés `localStorage` et le
+  nom du `BroadcastChannel` du verrou (EXG-48) sont préfixés `magic-battle:` : GitHub Pages partage
+  l'origine entre dépôts, un préfixe évite toute collision avec un autre projet publié sur le même compte.
+  `[complété par le challenger v8, trou #9]` Raison : ce sont des préférences de machine, pas de
+  progression de jeu ; le format de sauvegarde (§9, EXG-24 à 27) reste inchangé, aucune migration
+  nécessaire, le skill `sauvegarde-migration` reste différé. Conséquence assumée : les réglages ne voyagent
+  pas avec l'export/import de sauvegarde (EXG-24) — voulu, pas un oubli. Écarté : stocker les réglages dans
+  la sauvegarde principale (les ferait voyager entre machines via l'export, contredit « préférence de
+  machine » et forcerait une migration de schéma pour un champ qui n'est pas de la progression) ; clés
+  `localStorage` non préfixées (risque de collision d'origine sur GitHub Pages, trou #9).
 
 ## 16. Livraison par vagues
 
@@ -740,12 +854,15 @@ résumé hors-ligne non bloquant.
 
 | T | Tâche | EXG couvertes | Agent | Modèle | Done quand |
 | --- | --- | --- | --- | --- | --- |
-| T-18 | Store pont React (`state/`) branché sur `domain/`, boucle de rendu | EXG-1 à 3 côté UI | implémenteur-ui | Sonnet | Test de comptage de renders : aucun re-render global du panneau HUD à chaque tick de 100 ms |
-| T-19 | HUD panneaux (écoles, sorts, or/renommée/Éclats), desktop-first + repli mobile | EXG-35 | implémenteur-ui | Sonnet | Test visuel à 375 px et 1440 px passe, mesure des cibles ≥ 24 px |
-| T-20 | Sorts au clavier 1-6 + clic souris + barre tactile ≥ 44 px + affichage du cooldown | EXG-11, 12, 13, 14, 51 | implémenteur-ui | Sonnet | Test clavier touches 1-6 (dont verrouillage touche 6 avant Ascension) vert ; mesure des cibles tactiles ≥ 44 px ; temps de cooldown restant affiché et vérifié par test (EXG-12) `[complété par le challenger v2]` |
-| T-21 | Canvas combat (projectiles/impacts) + option performance + `prefers-reduced-motion` + budget de frame + plafond projectiles | EXG-29, 30, 33, 50, 52 | implémenteur-canvas | Sonnet | Media query `reduce` simulée → effets réduits par défaut ; mesure de frame ≤ 4 ms et plafond `N_PROJECTILES_MAX` respecté sur scénario saturé |
-| T-22 | Accessibilité (contraste AA, miroir DOM, focus clavier) | EXG-31, 32, 34 | implémenteur-ui | Sonnet | Audit axe-core 0 violation ; parcours clavier complet jusqu'au premier prestige sans souris |
-| T-23 | Confirmations prestige/Ascension, sauvegarde sur `visibilitychange`/`beforeunload`, écran d'erreur de sauvegarde, résumé hors-ligne en encart non bloquant, bouton « restaurer .bak », bandeau de lecture seule sur onglet secondaire | EXG-4, 19, 20, 21, 23, 27, 46, 48, 53 | implémenteur-ui | Sonnet | Test événementiel vert (écriture déclenchée par `visibilitychange`) ; test résumé hors-ligne (or gagné, temps écoulé, plafond atteint) n'intercepte aucun clic de panneau (EXG-4) ; bouton « restaurer .bak » recharge l'état d'avant import (EXG-46) ; bandeau visible et onglet en lecture seule sur un second onglet (EXG-48) `[complété par le challenger v2]` |
+| T-18-agent | Créer l'agent `implementeur-ui` (rôle, périmètre `src/state/`+`src/components/`+`src/canvas/`, modèle par défaut Sonnet). `implementeur-domaine` n'a pas le droit d'écrire dans `src/state/` (§11) : c'est pour ça que T-23a, et non un élargissement de `implementeur-domaine`, porte la persistance UI. | — | — (méta) | — | Fichier de config de l'agent `implementeur-ui` présent avant toute tâche T-18a-T-23b ; modèle par défaut Sonnet documenté, avec la dérogation Opus forcée de T-23a explicitement notée. `[complété par le challenger v8, trou #15]` |
+| T-18a | Outillage de test UI (ADR-20) : Vitest browser mode + Playwright (Chromium) + `@testing-library/react` + `axe-core`, cache du binaire Chromium en CI, budget de temps du hook Stop pour les tests navigateur, absence de Chromium = échec en `--strict` (§12) | — | implementeur-ui | Sonnet | Un test navigateur trivial (rouge puis vert) tourne dans `npm test` et dans `bash scripts/verify.sh` ; `verify.sh --strict` sans Chromium installé échoue (test exprès sur machine sans binaire) ; le job CI restaure Chromium depuis le cache s'il est présent. `[complété par le challenger v8, trou #15]` |
+| T-18 | Store pont React (`state/`) branché sur `domain/` (Zustand vanilla, tick hors React, sélecteurs fins — ADR-19), boucle de rendu, fabrique injectable `creerStoreJeu({ horloge, stockage, canal, matchMedia, idOnglet, portPage, portPlanificateur, etatInitial })` (aucune dépendance globale câblée en dur) avec deux ports dédiés : `portPage` (visibilité, `pagehide`, `pageshow`, `beforeunload`) et `portPlanificateur` (intervalles, `requestAnimationFrame`) — sans eux, deux onglets ouverts dans un même document de test reçoivent les mêmes événements et rien ne les distingue. `[complété par le challenger v9, N5]` Démarrage écrit en **contrat typé** (interface `SequenceDemarrage` : verrou → `importerTexte(principal)` sans exécuter son plan → `calculHorsLigne` (propriétaire du verrou seulement) → sauvegarde immédiate → boucle → auto-sauvegarde + battement), vérifié ici contre une **persistance factice en mémoire** (`stockage`/`canal` de test, jamais `localStorage`/`BroadcastChannel` réels) ; T-23a implémente ce même contrat avec la persistance réelle. `[complété par le challenger v8, trou #3] [complété par le challenger v9, N8]` | EXG-1 à 3 côté UI | implementeur-ui | Sonnet | Test de comptage de renders avec témoin positif : le panneau HUD ne re-rend pas à chaque tick de 100 ms, **mais** re-rend bien quand l'or affiché change après 10 ticks (témoin que le test peut détecter un vrai re-render) ; un panneau indépendant reste à 0 commit pendant la même fenêtre ; un delta de 5 s ne produit qu'une seule notification ; aucun `setState` déclenché si `nbTicks = 0` ; sélecteurs Zustand retournant des primitives, jamais l'état entier ; deux fabriques avec des ports `portPage`/`portPlanificateur` distincts reçoivent des événements indépendants (témoin de l'isolation multi-onglet). `[complété par le challenger v8, trou #10] [complété par le challenger v9, N5]` |
+| T-19 | HUD panneaux (écoles, sorts, or/renommée/Éclats), disposition desktop 3 colonnes + repli mobile en onglets (§7) | EXG-35, 47 | implementeur-ui | Sonnet | Test visuel à 375 px et 1440 px passe, mesure des cibles ≥ 24 px ; test navigateur EXG-47 (nom d'école ou message d'erreur hostile `<img src=x onerror=...>` → rendu en texte littéral, `window.__x` indéfini) + `grep -E 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML' src/` dans `scripts/verify.sh`, vu rouge sur une injection volontaire avant correction. `[complété par le challenger v8, trou #8]` |
+| T-20 | Sorts au clavier 1-6 + clic souris + barre tactile ≥ 44 px + affichage du cooldown | EXG-11, 12, 13, 14, 51 | implementeur-ui | Sonnet | Test clavier touches 1-6 (dont verrouillage touche 6 avant Ascension) vert ; mesure des cibles tactiles ≥ 44 px ; temps de cooldown restant affiché et vérifié par test (EXG-12) `[complété par le challenger v2]` |
+| T-21 | Canvas combat (`src/canvas/`), rendu procédural géométrique sans asset (§7), effets (projectiles/impacts) dérivés des écarts de compteurs de jeu entre deux frames (le moteur n'émet aucun événement « projectile ») + option performance + `prefers-reduced-motion` + budget de frame + plafond projectiles, `N_PROJECTILES_MAX = 200` déclarée dans `src/canvas/` (pas `src/donnees/`) `[complété par le challenger v8, trou #13]` | EXG-29, 30, 33, 50, 52 | implementeur-ui | Sonnet | Media query `reduce` simulée → effets réduits par défaut ; scénario forçant > 200 écarts de compteur sur une frame → demandes de dessin > 200, dessins effectifs ≤ `N_PROJECTILES_MAX`, plus anciens supprimés ; test déterministe EXG-30 : après 2 h simulées, nombre de structures parcourues par frame borné par `N_PROJECTILES_MAX`, indépendant de la durée écoulée ; temps de frame mesuré en ms **informatif seulement**, jamais bloquant en CI. `[complété par le challenger v9, #13]` |
+| T-23a | **Persistance réelle**, implémente le contrat typé de T-18 avec les ports réels : sauvegarde auto 30 s + événementielle (`visibilitychange`/`beforeunload`/`pagehide`), verrou multi-onglet et son transport (`BroadcastChannel` préfixé `magic-battle:`, ping ~500 ms au démarrage, écrire-puis-relire, expiration chiffrée dans le code à une valeur numérique fixe > 60 s, ≥ 3× la cadence de battement et > le ralentissement d'arrière-plan connu, relecture du verrou avant chaque écriture, `liberer` sur `pagehide`, re-revendication sur `pageshow`) `[complété par le challenger v9, N4]`, ordre de démarrage (cf. T-18) rejoué intégralement depuis le stockage à toute acquisition de verrou hors 1er démarrage (branche EXG-27 comprise), gel sans `calculHorsLigne` sur toute perte de verrou détectée sans acquisition `[complété par le challenger v9, N3]`, écran d'erreur EXG-27 sans écraser la donnée corrompue, `.bak` avec l'exception « principal illisible » d'EXG-46 `[complété par le challenger v9, N6]`, sur `hidden` : tick, sauvegarde et auto-sauvegarde suspendus, seul le battement du verrou continue (EXG-55) `[complété par le challenger v9, N1]`, onglet caché ou tout autre delta au-dessus du seuil traités comme hors-ligne (EXG-55), relais automatique de l'onglet secondaire (EXG-48) par rejeu complet du démarrage, action de store `importer(texte)` testée **sans UI**, réglages `magic-battle:reglages` lus en `try/catch` (ADR-21) avec fixtures hostiles (JSON invalide, type inattendu, clé étrangère) vues rouges avant validation `[complété par le challenger v9, N7]`. Le contrat de `src/state/` est déjà écrit côté domaine — pas à redéfinir ici : `src/domain/sauvegarde/index.ts` (`PlanEcrasement`, `OptionsImport.contenuCourant`), `sauvegarde/verrou.ts` (transport, délai d'expiration dérivé de la cadence de battement), `normalisation.ts` (`normaliserEtat`, à rejouer après reprise). Piège à éviter : le principal stocké est le **texte produit par `exporterTexte`** (base64), pas un JSON brut — `importerTexte` le relit tel quel ; un `deserialiser(JSON.parse(...))` direct déclencherait EXG-27 à chaque démarrage. `[complété par le challenger v8, trous #3, #4, #5, #6, #7, #9]` | EXG-4, 22, 23, 27, 46, 48, 55 | implementeur-ui | **Opus forcé** (§11 : `implementeur-domaine` n'écrit jamais dans `src/state/`, la responsabilité sauvegarde/verrou y bascule sur `implementeur-ui`) | « Écriture » = `setItem` sur `magic-battle:sauvegarde` compté après le démarrage : 0 à 29,9 s, 1 à 31 s ; 0→1 sur `hidden` et sur `pagehide` ; 0 dans l'onglet secondaire ; toute clé écrite par T-23a porte le préfixe `magic-battle:` (test qui échoue sur une clé non préfixée injectée exprès). `[complété par le challenger v9, N7]` Test EXG-55 : onglet caché 20 h → crédit hors-ligne plafonné à H, une seule fois ; sur `hidden`, aucune écriture de sauvegarde/auto-sauvegarde tant que l'onglet reste cadré, seul le battement du verrou continue ; écart < seuil au retour → crédit ≈ 0, test toujours vert. `[complété par le challenger v9, N1]` Test EXG-27 : principal tronqué → message, stockage identique octet pour octet après 31 s et `hidden`, `.bak` valide jamais écrasé (aucune copie faite quand le principal est illisible, EXG-46). Test EXG-46 : `importer(texte)` (action de store, sans UI) confirmé → `.bak` créé, restauration recharge l'état d'avant import, `derniereSauvegardeMs = maintenant`, aucun crédit hors-ligne sur une restauration (import sans crédit, `[complété par le challenger v9, N10]`). Test EXG-48 : deuxième onglet détecté, figé (tick/canvas arrêtés, actions du store **sans effet** — distinct du `disabled` visuel porté par T-23b, `[complété par le challenger v9, N10]`) ; fermeture propre du premier → relais immédiat ; disparition sans fermeture propre → figé jusqu'à `expiration − 1 ms` puis relais ; `pageshow` (bfcache) → rejeu du démarrage complet ; principal tronqué au moment du relais → figé, aucun `calculHorsLigne`, EXG-27. `[complété par le challenger v9, N3/N4/N10]` |
+| T-23b | **Confirmations et affichage** : confirmations prestige/Ascension à deux étapes (EXG-19, 20, 21 — gain affiché **au clic**, pas recalculé pendant que la modale est ouverte ; raccourcis 1-6 ignorés sous modale ou dans un champ ; focus initial sur « Annuler » ; boutons désactivés si `partieTerminee` ; tests dédiés pour l'annulation et pour l'Ascension à gain 0), encart hors-ligne non bloquant (EXG-4, 53 — `role="status"`, **pas** un `Dialog` shadcn qui bloquerait la page ; affiché seulement si le delta dépasse le seuil de rattrapage `nTicksMax × PAS_TICK_MS` (EXG-55, 60 s avec les constantes actuelles) ; pas de fermeture automatique, ou ≥ 20 s avec pause au survol), bandeau de lecture seule sur onglet secondaire (EXG-48, affichage conditionné à l'état exposé par T-23a). `[complété par le challenger v8, trous #11, #14]` `[complété par le challenger v9, N10]` | EXG-4, 19, 20, 21, 48, 53 | implementeur-ui | Sonnet | Test de recouvrement par clics réels Playwright (ou `elementFromPoint`), pas seulement `fireEvent`/user-event, qui ne détectent pas un encart superposé ; à 375 px et 1440 px, assertion explicite que le rectangle (`getBoundingClientRect`) de l'encart hors-ligne et celui de chaque cible de jeu (barre de sorts, panneaux) ne se chevauchent pas **avant** le clic, pas seulement après coup `[complété par le challenger v9, #11]` ; test de confirmation de prestige sous la zone 4 → affiche « 0 Éclat » au clic, pas un écran vide ; test d'annulation au premier écran → aucun état modifié ; test d'Ascension à gain 0 Point ; touches 1-6 sans effet pendant qu'une modale est ouverte ; focus initial vérifié sur « Annuler » ; boutons de confirmation désactivés une fois `partieTerminee` ; bandeau visible, actions **sans effet** sur le second onglet (T-23a, N10), `disabled` visuel + bandeau à l'écran (T-23b, N10) (EXG-48). |
+| T-22 | Accessibilité (contraste AA, miroir DOM, focus clavier) + script de ratios de palette (§14), audit sur la liste complète des états d'écran (vide, chargement, erreur EXG-27, succès, résumé hors-ligne EXG-4/53, confirmation prestige/Ascension EXG-21, bandeau lecture seule EXG-48) — **placée après T-23a/T-23b** : ces états (erreur EXG-27, bandeau EXG-48, encart hors-ligne EXG-53) n'existent qu'une fois T-23 livrée, un audit avant produirait des états factices non représentatifs. `[complété par le challenger v9, N8]` | EXG-31, 32, 34 | implementeur-ui | Sonnet | Audit axe-core `violations = 0` **et** `incomplete` de la règle `color-contrast` = 0 sur chacun des états listés, rendus par le code réel de T-19/T-21/T-23a/T-23b ; parcours clavier complet jusqu'au premier prestige sans souris ; script de ratios de palette vu rouge sur une paire de jetons injectée hors seuil, puis vert une fois la paire retirée ; assertions de mise en page explicites à 375/1440 px, toutes les cibles tactiles mesurées ; miroir DOM sans `aria-live` continu (pas de rafraîchissement à la cadence du tick). `[complété par le challenger v8, trou #12]` `[complété par le challenger v9, N8]` |
 
 Preuve de fin de vague : parcours clic → sort → boss → prestige jouable de bout en bout ; audit outillé
 d'accessibilité sans violation de contraste ; déploiement Pages mis à jour (preview par vague) ; revue
@@ -766,7 +883,7 @@ Preuve de fin de vague : relecture humaine/agent lecture seule du guide de ton (
 ### Vague 4 — Publication
 | T | Tâche | EXG couvertes | Agent | Modèle | Done quand |
 | --- | --- | --- | --- | --- | --- |
-| T-28 | Export/import base64 exposé en UI | EXG-24 | implémenteur-ui | Sonnet | Test UI round-trip export → import via l'interface, y compris message d'erreur sur import invalide |
+| T-28 | Export/import base64 exposé en UI | EXG-24 | implementeur-ui | Sonnet | Test UI round-trip export → import via l'interface, y compris message d'erreur sur import invalide |
 | T-29 | Revue finale lecture seule (secrets Actions, frontières §10 respectées, sécurité de l'import) | — | revue lecture seule | Opus | Rapport de revue sans anomalie sur secrets/frontières §10/sécurité §6 |
 
 Hors périmètre V1 (rappel §3.2) : zip itch.io, PWA installable, i18n multi-langue.
@@ -776,24 +893,25 @@ scripts/verify.sh` vert en CI.
 ### Table de traçabilité EXG → tâche
 | EXG | Tâche(s) | EXG | Tâche(s) | EXG | Tâche(s) |
 | --- | --- | --- | --- | --- | --- |
-| 1 | T-2, T-18 | 19 | T-6, T-23 | 37 | T-12 |
-| 2 | T-2 | 20 | T-7, T-23 | 38 | T-6 |
-| 3 | T-2, T-14 | 21 | T-6, T-7, T-23 | 39 | T-6 |
-| 4 | T-2, T-14, T-23 | 22 | T-23 | 40 | T-7 |
-| 5 | T-2 | 23 | T-23 | 41 | T-7 |
+| 1 | T-2, T-18 | 19 | T-6, T-23b | 37 | T-12 |
+| 2 | T-2 | 20 | T-7, T-23b | 38 | T-6 |
+| 3 | T-2, T-14 | 21 | T-6, T-7, T-23b | 39 | T-6 |
+| 4 | T-2, T-14, T-23a, T-23b | 22 | T-23a | 40 | T-7 |
+| 5 | T-2 | 23 | T-23a | 41 | T-7 |
 | 6 | T-3 | 24 | T-10, T-28 | 42 | T-8 |
 | 7 | T-3 | 25 | T-10 | 43 | T-8, T-26 |
 | 8 | T-3 | 26 | T-10 | 44 | T-13 |
-| 9 | T-3 | 27 | T-10, T-23 | 45 | T-10 |
-| 10 | T-8, T-9 | 28 | T-13, T-27 | 46 | T-10, T-23 |
-| 11 | T-4, T-20 | 29 | T-21 | 47 | T-10 |
-| 12 | T-4, T-20 | 30 | T-21 | 48 | T-11, T-23 |
+| 9 | T-3 | 27 | T-10, T-23a | 45 | T-10 |
+| 10 | T-8, T-9 | 28 | T-13, T-27 | 46 | T-10, T-23a |
+| 11 | T-4, T-20 | 29 | T-21 | 47 | T-10, T-19 |
+| 12 | T-4, T-20 | 30 | T-21 | 48 | T-11, T-23a, T-23b |
 | 13 | T-20 | 31 | T-22 | 49 | T-2, T-14 |
 | 14 | T-20 | 32 | T-22 | 50 | T-21 |
 | 15 | T-5 | 33 | T-21 | 51 | T-20 |
 | 16 | T-5 | 34 | T-22 | 52 | T-21 |
-| 17 | T-5 | 35 | T-19 | 53 | T-23 |
+| 17 | T-5 | 35 | T-19 | 53 | T-23b |
 | 18 | T-6 | 36 | T-12 | 54 | T-9 |
+| 55 | T-23a | — | — | — | — |
 
 ## Sources
 - Fiche de référence *Magic Archery* (Barribob) — recherche interview, 2026-09-20 (Steam app 2905170,
