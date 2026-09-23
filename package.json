@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit",
     "lint": "oxlint",
     "test": "vitest run",
+    "mesure:frame": "MESURE=1 vitest run --project ui",
     "equilibrage:check": "tsx tools/idle-balance/check.ts",
     "equilibrage:empreinte": "tsx tools/idle-balance/empreinte.ts",
     "equilibrage:search": "tsx tools/idle-balance/search.ts",

@@ -24,7 +24,9 @@ export default defineConfig({
       {
         test: {
           name: 'ui',
-          include: ['tests/ui/**/*.test.tsx'],
+          // Les relevés informatifs (`*.mesure.tsx`, EVAL-002) ne bloquent jamais : hors `npm test` et hors
+          // hook Stop, lancés à la demande par `npm run mesure:frame`.
+          include: process.env.MESURE ? ['tests/ui/**/*.mesure.tsx'] : ['tests/ui/**/*.test.tsx'],
           browser: {
             enabled: true,
             headless: true,
