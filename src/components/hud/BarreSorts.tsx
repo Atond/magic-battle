@@ -71,6 +71,7 @@ function CarteSort({ store, idSort }: { readonly store: StoreJeuApi; readonly id
     Math.ceil(etatSortLu(s.etat, idSort, CONSTANTES).cooldownRestantMs / 1000),
   )
   const lancerSort = useStoreJeu(store, (s) => s.actions.lancerSort)
+  const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
 
   const parametres = SORTS.find((s) => s.id === idSort)
   if (parametres === undefined) return null
@@ -100,7 +101,7 @@ function CarteSort({ store, idSort }: { readonly store: StoreJeuApi; readonly id
       <button
         type="button"
         data-testid={`sort-${touche}`}
-        disabled={enCooldown}
+        disabled={enCooldown || lectureSeule}
         onClick={() => lancerSort(idSort)}
         aria-label={`${nomSort(idEcole)} — ${TEXTES_UI.sorts.touche(touche)}${enCooldown ? ` — ${TEXTES_UI.sorts.enCooldown(cooldownSecondes)}` : ''}`}
         className="flex min-h-11 w-full min-w-11 flex-col items-center justify-center gap-0.5 rounded-md border-l-4 bg-[var(--couleur-charbon-900)] px-2 py-1 text-center enabled:hover:bg-[var(--couleur-charbon-800)] disabled:cursor-not-allowed disabled:opacity-60"

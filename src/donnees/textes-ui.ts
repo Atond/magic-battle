@@ -106,9 +106,63 @@ export const TEXTES_UI = {
     } as const,
   },
 
+  commun: {
+    annuler: 'Annuler',
+    fermer: 'Fermer',
+  },
+
   prestige: {
     titre: 'Prestige',
-    description: 'Recommence le run, garde des Éclats — la confirmation arrive bientôt.',
-    bouton: 'Prestige (bientôt)',
+    description: 'Recommence le run, garde des Éclats.',
+    bouton: 'Prestiger',
+    boutonVerrouille: 'Partie terminée',
+    etape1Titre: 'Recommencer le run ?',
+    etape1Intro: (zone: number) => `Zone atteinte : ${zone}. Le run repart de zéro, mais rien n’est perdu pour de bon.`,
+    etape1Perte: (or: string, niveaux: number) => `Tu laisses ${or} or et ${niveaux} niveau${niveaux > 1 ? 'x' : ''} d’écoles derrière toi.`,
+    etape1Continuer: 'Continuer',
+    etape2Titre: 'Confirme le prestige',
+    etape2Gain: (eclats: string) => `Tu empoches ${eclats} Éclat en échange.`,
+    etape2GainPluriel: (eclats: string) => `Tu empoches ${eclats} Éclats en échange.`,
+    confirmer: 'Confirmer le prestige',
+  },
+
+  ascension: {
+    titre: 'Ascension',
+    description: 'Efface le cycle d’Éclats, débloque l’arbre permanent.',
+    bouton: 'Ascensionner',
+    boutonVerrouille: 'Pas encore',
+    boutonPartieTerminee: 'Partie terminée',
+    progression: (fait: number, requis: number) => `${fait} / ${requis} prestiges de ce cycle`,
+    etape1Titre: 'Ascensionner ?',
+    etape1Intro: 'Le cycle d’Éclats repart à zéro — compteurs et arbre d’Éclats compris. L’arbre d’Ascension, lui, reste acquis.',
+    etape1Perte: (or: string, niveaux: number) => `Le run en cours te laisse ${or} or et ${niveaux} niveau${niveaux > 1 ? 'x' : ''} d’écoles derrière toi.`,
+    etape1Continuer: 'Continuer',
+    etape2Titre: 'Confirme l’Ascension',
+    etape2Gain: (points: string) => `Tu gagnes ${points} Point d’Ascension.`,
+    etape2GainPluriel: (points: string) => `Tu gagnes ${points} Points d’Ascension.`,
+    etape2Ecole: 'Ça révèle aussi une 6ᵉ école.',
+    confirmer: 'Confirmer l’Ascension',
+  },
+
+  lectureSeule: {
+    ongletSecondaire: 'Un autre onglet joue déjà cette partie — celui-ci se contente de regarder.',
+    verrouPerdu: 'Un autre onglet a repris la main sur cette partie. Ferme celui-ci ou rouvre-le pour relire la partie à jour.',
+  },
+
+  horsLigne: {
+    titre: 'Pendant ton absence',
+    resume: (or: string, duree: string) => `${duree} d’absence, ${or} or gagné.`,
+    plafond: (or: string, duree: string) => `Absence plafonnée à ${duree} — ${or} or gagné, le reste n’a pas compté.`,
+  },
+
+  illisible: {
+    titre: 'Sauvegarde illisible',
+    message: 'Cette sauvegarde ne se relit pas correctement. Rien n’a été effacé : choisis quoi faire.',
+    detailLabel: 'Détail technique',
+    restaurer: 'Restaurer la sauvegarde de secours',
+    nouvellePartie: 'Nouvelle partie',
+    confirmationTitre: 'Repartir de zéro ?',
+    confirmationCorps: 'La sauvegarde illisible restera intacte tant que tu ne confirmes pas — c’est ce nouveau départ qui prend sa place.',
+    confirmer: 'Confirmer la nouvelle partie',
   },
 } as const

@@ -42,6 +42,8 @@ import { acheterNiveaux } from '../domain/ecoles/index.ts'
 import { acheterAmelioration } from '../domain/ameliorations/index.ts'
 import { acheterEquipement } from '../domain/equipement/index.ts'
 import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
+import { prestiger } from '../domain/prestige/index.ts'
+import { ascensionner } from '../domain/ascension/index.ts'
 import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
 import {
@@ -96,6 +98,14 @@ export interface ActionsStoreJeu {
   readonly acheterEquipement: (id: string) => void
   /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde. */
   readonly acheterNoeudEclats: (id: string) => void
+  /**
+   * EXG-19 / EXG-21 — étape 2 du prestige : applique `prestiger` (`src/domain/prestige/index.ts`). Même
+   * garde que `clic` (aucun effet hors mode `actif`, donc pas en lecture seule) ; l'aperçu (étape 1, gain
+   * affiché) se lit séparément via `apercuPrestige`, jamais recalculé ici.
+   */
+  readonly prestige: () => void
+  /** EXG-20 / EXG-21 — étape 2 de l'Ascension : applique `ascensionner`, même garde. */
+  readonly ascensionner: () => void
   /**
    * EXG-24 / EXG-46 — importe un texte d'export (sans UI : T-28 branchera le champ). Import confirmé ⇒
    * l'état courant part dans `.bak` (sauf principal illisible : aucune copie, EXG-46), puis le principal
@@ -265,6 +275,8 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
         acheterAmelioration: (id) => jouer((etat) => acheterAmelioration(etat, id, CONSTANTES).etat),
         acheterEquipement: (id) => jouer((etat) => acheterEquipement(etat, id, CONSTANTES).etat),
         acheterNoeudEclats: (id) => jouer((etat) => acheterNoeudArbre(etat, id, 1, 'eclats', CONSTANTES).etat),
+        prestige: () => jouer((etat) => prestiger(etat, CONSTANTES).etat),
+        ascensionner: () => jouer((etat) => ascensionner(etat, CONSTANTES).etat),
         importer: (texte) => importer(texte),
         restaurerSecours: () => restaurer(),
         nouvellePartie: () => nouvellePartie(),

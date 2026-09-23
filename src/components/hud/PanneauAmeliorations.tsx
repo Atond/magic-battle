@@ -12,6 +12,7 @@ function CarteAmelioration({ store, id }: { readonly store: StoreJeuApi; readonl
   const palier = useStoreJeu(store, (s) => s.etat.paliersAmeliorations[id] ?? 0)
   const or = useStoreJeu(store, (s) => s.etat.bourse.or)
   const acheterAmelioration = useStoreJeu(store, (s) => s.actions.acheterAmelioration)
+  const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
 
   const parametres = CONSTANTES.ameliorations.find((a) => a.id === id)
   if (parametres === undefined) return null
@@ -32,7 +33,7 @@ function CarteAmelioration({ store, id }: { readonly store: StoreJeuApi; readonl
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={!peutAcheter}
+        disabled={!peutAcheter || lectureSeule}
         onClick={() => acheterAmelioration(id)}
       >
         {auMax ? TEXTES_UI.arbreEclats.rangMax : `${TEXTES_UI.ameliorations.acheter} · ${formater(cout ?? 0)}`}

@@ -12,6 +12,7 @@ function CarteEquipement({ store, id }: { readonly store: StoreJeuApi; readonly 
   const palier = useStoreJeu(store, (s) => s.etat.paliersEquipement[id] ?? 0)
   const renommee = useStoreJeu(store, (s) => s.etat.bourse.renommee)
   const acheterEquipement = useStoreJeu(store, (s) => s.actions.acheterEquipement)
+  const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
 
   const parametres = CONSTANTES.equipement.find((e) => e.id === id)
   if (parametres === undefined) return null
@@ -32,7 +33,7 @@ function CarteEquipement({ store, id }: { readonly store: StoreJeuApi; readonly 
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={!peutAcheter}
+        disabled={!peutAcheter || lectureSeule}
         onClick={() => acheterEquipement(id)}
       >
         {auMax ? TEXTES_UI.arbreEclats.rangMax : `${TEXTES_UI.equipement.acheter} · ${formater(cout ?? 0)}`}

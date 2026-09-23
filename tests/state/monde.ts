@@ -142,6 +142,8 @@ export function creerMonde(T0 = 1_700_000_000_000): Monde {
       // Comme `BroadcastChannel` : jamais livré à l'instance qui publie, seulement aux autres.
       for (const canal of canaux) {
         if (canal === source || !canal.ouvert || !canal.vivant()) continue
+        // Copie voulue : un gestionnaire peut se désabonner pendant la diffusion.
+        // oxlint-disable-next-line unicorn/no-useless-spread
         for (const g of [...canal.gestionnaires]) g(structuredClone(message))
       }
     }
@@ -231,6 +233,8 @@ export function creerMonde(T0 = 1_700_000_000_000): Monde {
       return () => ensemble.delete(g)
     }
     const emettre = (ensemble: Set<() => void>) => {
+      // Copie voulue : un gestionnaire peut se désabonner pendant l'émission.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const g of [...ensemble]) g()
     }
     const page: PortPageSimule = {

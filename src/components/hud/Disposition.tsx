@@ -15,6 +15,8 @@ import { useState } from 'react'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { BandeauHaut } from './BandeauHaut.tsx'
+import { BandeauLectureSeule } from './BandeauLectureSeule.tsx'
+import { EncartHorsLigne } from './EncartHorsLigne.tsx'
 import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
@@ -53,7 +55,7 @@ function DispositionDesktop({ store }: { readonly store: StoreJeuApi }) {
       </div>
       <div className="flex flex-col gap-2 overflow-y-auto">
         <ColonneAchats store={store} />
-        <PanneauPrestige />
+        <PanneauPrestige store={store} />
       </div>
     </div>
   )
@@ -82,7 +84,7 @@ function DispositionMobile({ store }: { readonly store: StoreJeuApi }) {
       <div role="tabpanel" className="flex flex-col gap-2">
         {onglet === 'ecoles' && <PanneauEcoles store={store} />}
         {onglet === 'ameliorations' && <ColonneAchats store={store} />}
-        {onglet === 'prestige' && <PanneauPrestige />}
+        {onglet === 'prestige' && <PanneauPrestige store={store} />}
       </div>
     </div>
   )
@@ -96,6 +98,8 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
   return (
     <div className="min-h-screen bg-[var(--couleur-charbon-950)]">
       <BandeauHaut store={store} />
+      <BandeauLectureSeule store={store} />
+      <EncartHorsLigne store={store} />
       <DispositionDesktop store={store} />
       <DispositionMobile store={store} />
     </div>

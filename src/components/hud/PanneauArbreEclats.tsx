@@ -17,6 +17,7 @@ function CarteNoeud({ store, noeud }: { readonly store: StoreJeuApi; readonly no
   const eclatsDepensables = useStoreJeu(store, (s) => s.etat.bourse.eclatsDepensables)
   const debloque = useStoreJeu(store, (s) => prerequisRemplis(s.etat, noeud, CONSTANTES))
   const acheterNoeudEclats = useStoreJeu(store, (s) => s.actions.acheterNoeudEclats)
+  const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
 
   const auMax = noeud.rangMax !== null && rang >= noeud.rangMax
   const cout = auMax ? null : coutRangNoeud(rang, noeud, CONSTANTES)
@@ -39,7 +40,7 @@ function CarteNoeud({ store, noeud }: { readonly store: StoreJeuApi; readonly no
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={!peutAcheter}
+        disabled={!peutAcheter || lectureSeule}
         onClick={() => acheterNoeudEclats(noeud.id)}
       >
         {libelleBouton}

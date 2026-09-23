@@ -19,6 +19,7 @@ function CarteEcole({ store, id }: { readonly store: StoreJeuApi; readonly id: I
   const revelee = useStoreJeu(store, (s) => s.etat.ecoles[id].revelee)
   const accessible = useStoreJeu(store, (s) => ecoleAccessible(s.etat, id, CONSTANTES))
   const or = useStoreJeu(store, (s) => s.etat.bourse.or)
+  const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
   const acheterEcole = useStoreJeu(store, (s) => s.actions.acheterEcole)
   const accent = `var(--couleur-ecole-${id})`
 
@@ -57,7 +58,7 @@ function CarteEcole({ store, id }: { readonly store: StoreJeuApi; readonly id: I
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={!peutAcheter}
+        disabled={!peutAcheter || lectureSeule}
         onClick={() => acheterEcole(id)}
       >
         {TEXTES_UI.ecoles.acheter} · {formater(cout)}
