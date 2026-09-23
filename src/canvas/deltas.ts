@@ -6,6 +6,7 @@
 // Fonctions pures, sans DOM ni canvas : testables sans navigateur (`tests/ui/canvas-deltas.test.ts`).
 
 import type { EtatJeu, IdEcole } from '../domain/types.ts'
+import { N_PROJECTILES_MAX } from './constantes.ts'
 
 /** Ce que le canvas retient d'une frame pour repérer ce qui a changé à la suivante. */
 export interface InstantaneCombat {
@@ -47,9 +48,15 @@ function deltaPositif(avant: number, apres: number): number {
 }
 
 /**
- * Construit la liste des effets à ajouter au tampon (voir `tampon.ts` pour le plafond `N_PROJECTILES_MAX`
- * — cette fonction, elle, ne borne RIEN : un rattrapage hors-ligne peut légitimement produire des milliers
- * de deltas d'un coup sur une seule frame (EXG-52, « scénario forçant plus de 200 écarts »).
+ * Construit la liste des effets à ajouter au tampon (voir `tampon.ts` pour le plafond `N_PROJECTILES_MAX`,
+ * appliqué APRÈS combinaison avec le tampon existant). Cette fonction-ci borne chaque delta à
+ * `N_PROJECTILES_MAX` AVANT de construire le tableau : un rattrapage hors-ligne peut légitimement produire
+ * des écarts de compteur énormes (des heures de clics simulées d'un coup, voire `Number.MAX_SAFE_INTEGER`
+ * si une sauvegarde corrompue passait un compteur aberrant) — sans ce plafond amont, `for (let i = 0; i <
+ * deltaClics…)` bouclerait autant de fois que l'écart, indépendamment de ce que `ajouterProjectiles`
+ * garde ensuite. Un seul de ces effets ne sera de toute façon jamais visible au-delà de
+ * `N_PROJECTILES_MAX` dessins simultanés : borner ici est un plafond de coût, pas une perte d'information
+ * pour le joueur.
  */
 export function demanderEffets(
   precedent: InstantaneCombat,
@@ -60,7 +67,7 @@ export function demanderEffets(
 ): DemandeEffet[] {
   const demandes: DemandeEffet[] = []
 
-  const deltaClics = deltaPositif(precedent.clicsCumules, courant.clicsCumules)
+  const deltaClics = Math.min(deltaPositif(precedent.clicsCumules, courant.clicsCumules), N_PROJECTILES_MAX)
   for (let i = 0; i < deltaClics; i += 1) {
     demandes.push({ couleur: couleurClic, type: 'projectile' })
   }
@@ -73,7 +80,7 @@ export function demanderEffets(
     }
   }
 
-  const deltaMonstres = deltaPositif(precedent.monstresTues, courant.monstresTues)
+  const deltaMonstres = Math.min(deltaPositif(precedent.monstresTues, courant.monstresTues), N_PROJECTILES_MAX)
   for (let i = 0; i < deltaMonstres; i += 1) {
     demandes.push({ couleur: couleurImpact, type: 'impact' })
   }

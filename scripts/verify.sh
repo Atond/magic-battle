@@ -96,14 +96,32 @@ fi
 # --- (h) aucun rendu HTML non filtré dans src/ (EXG-47) : toujours actif dès que src existe ---
 if [ -d src ]; then
   # Une sauvegarde ou un texte hostile traverse la couche d'affichage comme une chaîne, jamais comme du
-  # balisage (spec EXG-47) : `dangerouslySetInnerHTML` (React), `.innerHTML`/`.insertAdjacentHTML` (DOM)
-  # sont les trois portes qui feraient exécuter un `<img onerror=…>` planqué dans un nom de sauvegarde.
-  html_non_filtre="$(grep -rEn 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML' src --include='*.ts' --include='*.tsx' 2>/dev/null | grep -vE ':[[:space:]]*(//|\*|/\*)' || true)"
+  # balisage (spec EXG-47). Liste volontairement large des portes qui feraient exécuter un
+  # `<img onerror=…>` (ou équivalent) planqué dans un nom de sauvegarde — au-delà des trois évidentes
+  # (`dangerouslySetInnerHTML`, `.innerHTML`, `.insertAdjacentHTML`) : `.outerHTML` (même effet que
+  # `innerHTML` côté parent), `document.write` (réécrit le document entier), `srcdoc`/`srcDoc` (un
+  # `<iframe>` rempli de balisage plutôt que de texte), `javascript:` (URL exécutable, ex. `href`/`src`),
+  # `createContextualFragment` (parse une chaîne en nœuds DOM hors `innerHTML`), `DOMParser`/
+  # `parseFromString` (autre parseur HTML), `setHTMLUnsafe` (l'équivalent direct d'`innerHTML` sur
+  # `Element`/`ShadowRoot`, plus récent). Revue une échelle plus large de fichiers (`.js`/`.jsx` en plus
+  # de `.ts`/`.tsx`) : rien n'empêche un fichier non-TS de s'y glisser un jour.
+  html_non_filtre="$(grep -rEn 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML|outerHTML|document\.write|srcdoc|srcDoc|javascript:|createContextualFragment|DOMParser|parseFromString|setHTMLUnsafe' src --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' 2>/dev/null | grep -vE ':[[:space:]]*(//|\*|/\*)' || true)"
   if [ -n "$html_non_filtre" ]; then
-    echo "$html_non_filtre"; echec "aucun rendu HTML non filtré dans src/ (dangerouslySetInnerHTML/innerHTML/insertAdjacentHTML — EXG-47)"
+    echo "$html_non_filtre"; echec "aucun rendu HTML non filtré dans src/ (EXG-47 — voir la liste de portes dans verify.sh)"
   else ok "aucun rendu HTML non filtré dans src/ (EXG-47)"; fi
 else
   ignore "rendu HTML non filtré dans src/" "dossier absent"
+fi
+
+# --- (h-bis) même garde-fou sur index.html à la racine (EXG-47) : un `<script>` inline ou un `srcdoc`
+# planqué là échapperait au grep ci-dessus, qui ne balaie que src/. ---
+if [ -f index.html ]; then
+  html_non_filtre_racine="$(grep -Ein 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML|outerHTML|document\.write|srcdoc|srcDoc|javascript:|createContextualFragment|DOMParser|parseFromString|setHTMLUnsafe' index.html 2>/dev/null || true)"
+  if [ -n "$html_non_filtre_racine" ]; then
+    echo "$html_non_filtre_racine"; echec "aucun rendu HTML non filtré dans index.html (EXG-47 — voir la liste de portes dans verify.sh)"
+  else ok "aucun rendu HTML non filtré dans index.html (EXG-47)"; fi
+else
+  ignore "rendu HTML non filtré dans index.html" "fichier absent"
 fi
 
 # --- étapes npm (tolérantes) ---

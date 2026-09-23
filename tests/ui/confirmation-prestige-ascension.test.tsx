@@ -185,6 +185,48 @@ describe('confirmation à deux étapes — prestige (EXG-19/21)', () => {
     unmount()
     store.arreter()
   })
+
+  it('le gain figé à l’ouverture ne se recalcule pas pendant que la modale est ouverte, et c’est lui qui est crédité (spec T-23b)', async () => {
+    await page.viewport(1440, 900)
+    // Zone 10, k=0.3/alpha=1 (constantes actuelles) : floor(0.3 × 10) = 3 Éclats — non nul (zone ≥ 4).
+    const store = creerStoreDeTest((horodatageMs) => {
+      const base = etatInitial(horodatageMs)
+      return { ...base, combat: { ...base.combat, zone: 10 }, prestige: { ...base.prestige, zoneMaxDuRun: 10 } }
+    })
+    const { getByRole, getAllByTestId, unmount } = render(<Disposition store={store} />)
+
+    await userEvent.click(visible(getAllByTestId('bouton-declencher-prestige')))
+    const etape1 = getByRole('dialog', { name: 'Recommencer le run ?' })
+    await userEvent.click([...etape1.querySelectorAll('button')].find((b) => b.textContent === 'Continuer')!)
+
+    const etape2 = getByRole('dialog', { name: 'Confirme le prestige' })
+    expect(visible(getAllByTestId('prestige-gain')).textContent).toContain('3 Éclats')
+
+    // Pendant que la modale reste ouverte, l'état change sous elle (l'équivalent d'un tick de jeu qui
+    // ferait progresser `zoneMaxDuRun`, donc le gain recalculé EN DIRECT — floor(0.3 × 100) = 30) :
+    store.setState((s) => ({
+      etat: { ...s.etat, combat: { ...s.etat.combat, zone: 100 }, prestige: { ...s.etat.prestige, zoneMaxDuRun: 100 } },
+    }))
+
+    // Laisse React flusher un éventuel re-render déclenché par ce changement d'état, plutôt que de lire
+    // le DOM avant que la mise à jour n'ait eu la moindre chance de s'appliquer (ce qui masquerait un
+    // recalcul en direct au lieu de prouver l'absence de recalcul).
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+
+    // Le texte affiché ne doit PAS avoir bougé : c'est le gain figé à l'ouverture, pas la valeur en direct.
+    expect(visible(getAllByTestId('prestige-gain')).textContent).toContain('3 Éclats')
+    expect(visible(getAllByTestId('prestige-gain')).textContent).not.toContain('30 Éclats')
+
+    await userEvent.click([...etape2.querySelectorAll('button')].find((b) => b.textContent?.includes('Confirmer'))!)
+
+    // Crédité : exactement le gain figé affiché (3), jamais le gain recalculé au clic (qui aurait été 30
+    // si le domaine avait retrouvé `zoneMaxDuRun: 100` au moment de `prestiger()`).
+    expect(store.getState().etat.bourse.eclatsPossedes).toBe(3)
+    expect(store.getState().etat.prestige.eclatsCumulesAVie).toBe(3)
+
+    unmount()
+    store.arreter()
+  })
 })
 
 describe('confirmation à deux étapes — Ascension (EXG-20/21)', () => {
@@ -209,6 +251,39 @@ describe('confirmation à deux étapes — Ascension (EXG-20/21)', () => {
     expect(store.getState().etat.ascension.ascensionsEffectuees).toBe(1)
     expect(store.getState().etat.bourse.eclatsPossedes).toBe(0)
     expect(store.getState().etat.prestige.rangsArbreEclats).toEqual({})
+
+    unmount()
+    store.arreter()
+  })
+
+  it('le gain de Points d’Ascension figé à l’ouverture n’est pas recalculé pendant que la modale est ouverte, et c’est lui qui est crédité (spec T-23b)', async () => {
+    await page.viewport(1440, 900)
+    // kAscension=1 (constantes actuelles) : floor(1 × √16) = 4 Points — non nul.
+    const store = creerStoreDeTest((horodatageMs) => {
+      const base = etatInitial(horodatageMs)
+      return { ...base, prestige: { ...base.prestige, prestigesDuCycle: 6, eclatsCumulesAVie: 16 } }
+    })
+    const { getByRole, getAllByTestId, unmount } = render(<Disposition store={store} />)
+
+    await userEvent.click(visible(getAllByTestId('bouton-declencher-ascension')))
+    const etape1 = getByRole('dialog', { name: 'Ascensionner ?' })
+    await userEvent.click([...etape1.querySelectorAll('button')].find((b) => b.textContent === 'Continuer')!)
+
+    const etape2 = getByRole('dialog', { name: 'Confirme l’Ascension' })
+    expect(visible(getAllByTestId('ascension-gain')).textContent).toContain('4 Points')
+
+    // floor(1 × √10000) = 100 Points si le gain était recalculé en direct à ce moment.
+    store.setState((s) => ({
+      etat: { ...s.etat, prestige: { ...s.etat.prestige, eclatsCumulesAVie: 10_000 } },
+    }))
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+
+    expect(visible(getAllByTestId('ascension-gain')).textContent).toContain('4 Points')
+    expect(visible(getAllByTestId('ascension-gain')).textContent).not.toContain('100 Points')
+
+    await userEvent.click([...etape2.querySelectorAll('button')].find((b) => b.textContent?.includes('Confirmer'))!)
+
+    expect(store.getState().etat.bourse.pointsAscension).toBe(4)
 
     unmount()
     store.arreter()

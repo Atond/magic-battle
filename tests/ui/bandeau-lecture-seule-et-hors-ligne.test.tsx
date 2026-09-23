@@ -18,7 +18,8 @@ import '../../src/index.css'
 
 import { PAS_TICK_MS } from '../../src/domain/constantes-moteur.ts'
 import { etatInitial } from '../../src/domain/moteur.ts'
-import { exporterTexte, NOM_PRINCIPAL } from '../../src/domain/sauvegarde/index.ts'
+import { formater } from '../../src/domain/notation.ts'
+import { exporterTexte, NOM_PRINCIPAL, NOM_SECOURS } from '../../src/domain/sauvegarde/index.ts'
 import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { Disposition } from '../../src/components/hud/Disposition.tsx'
 import { EcranSauvegardeIllisible } from '../../src/components/hud/EcranSauvegardeIllisible.tsx'
@@ -37,6 +38,7 @@ import type { StoreJeuApi } from '../../src/state/store.ts'
 
 const T0 = 1_700_000_000_000
 const CLE_PRINCIPALE = `${PREFIXE_STOCKAGE}${NOM_PRINCIPAL}`
+const CLE_SECOURS = `${PREFIXE_STOCKAGE}${NOM_SECOURS}`
 /** EXG-55 — même seuil que `store.ts`/`EncartHorsLigne.tsx` : `nTicksMax × PAS_TICK_MS`. */
 const SEUIL_HORS_LIGNE_MS = CONSTANTES.tick.nTicksMax * PAS_TICK_MS
 
@@ -62,6 +64,57 @@ function ouvrirAvecSauvegardeAncienne(idOnglet: string, ecartMs: number) {
 /** Aucun overlap de rectangles (spec T-23b) : deux éléments visibles ne se chevauchent jamais en x/y. */
 function seChevauchent(a: DOMRect, b: DOMRect): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+}
+
+/** Stockage factice qui journalise chaque écriture (clé, valeur) — pour prouver, octet près, qu'une
+ *  clé précise n'a JAMAIS été touchée plutôt que de le déduire de l'état applicatif. */
+function creerStockageJournalise() {
+  const table = new Map<string, string>()
+  const ecritures: { readonly cle: string; readonly valeur: string }[] = []
+  return {
+    ecritures,
+    stockage: {
+      lire: (cle: string) => table.get(cle) ?? null,
+      ecrire: (cle: string, valeur: string) => {
+        table.set(cle, valeur)
+        ecritures.push({ cle, valeur })
+      },
+      supprimer: (cle: string) => {
+        table.delete(cle)
+      },
+    },
+  }
+}
+
+/**
+ * Une vraie sauvegarde principale illisible (JSON tronqué, pas une fixture qui contourne le vrai pipeline
+ * `importerTexte`) + un `.bak` valide exporté par le moteur — exactement le scénario EXG-27/EXG-46 que
+ * `store.ts` doit refuser de toucher tant que « Nouvelle partie » n'est pas confirmée.
+ */
+function ouvrirIllisibleAvecSecoursValide(idOnglet: string) {
+  const { stockage, ecritures } = creerStockageJournalise()
+  const texteSecoursValide = exporterTexte(etatInitial(T0 - 60_000), T0 - 60_000)
+  const texteTronque = exporterTexte(etatInitial(T0), T0).slice(0, 20) // JSON coupé au milieu : illisible.
+  stockage.ecrire(CLE_PRINCIPALE, texteTronque)
+  stockage.ecrire(CLE_SECOURS, texteSecoursValide)
+
+  const planificateur = creerPortPlanificateurFactice()
+  const store = creerStoreJeu({
+    horloge: creerHorlogeFactice(T0),
+    stockage,
+    canal: creerCanalFactice(),
+    matchMedia: creerMatchMediaFactice(),
+    idOnglet,
+    portPage: creerPortPageFactice(),
+    portPlanificateur: planificateur,
+    etatInitial,
+  })
+  confirmerDemarrage(planificateur)
+  // Le démarrage écrit lui-même le verrou (EXG-48) — une écriture légitime, sans rapport avec les actions
+  // du test. On ne commence à journaliser qu'une fois la séquence de démarrage terminée, pour que le
+  // journal ne parle plus que de ce que l'écran « sauvegarde illisible » fait réellement.
+  ecritures.length = 0
+  return { store, stockage, ecritures, texteTronque, texteSecoursValide }
 }
 
 describe('encart hors-ligne — recouvrement (EXG-4/53)', () => {
@@ -103,6 +156,45 @@ describe('encart hors-ligne — recouvrement (EXG-4/53)', () => {
 
     unmount()
     store.arreter()
+  })
+
+  it('affiche l’or gagné, la durée écoulée et si le plafond a été atteint, tous deux formatés (EXG-4)', async () => {
+    await page.viewport(1440, 900)
+
+    // Cas 1 — absence modeste, sous le plafond : « X min d'absence, Y or gagné. »
+    const storeSansPlafond = ouvrirAvecSauvegardeAncienne('onglet-hl-exg4-sans-plafond', SEUIL_HORS_LIGNE_MS + 5 * 60_000)
+    const rendu1 = render(<Disposition store={storeSansPlafond} />)
+    try {
+      const resume = storeSansPlafond.getState().resumeHorsLigne
+      expect(resume).not.toBeNull()
+      expect(resume!.plafondAtteint).toBe(false)
+
+      const texte = rendu1.getByTestId('encart-hors-ligne').textContent!
+      // Les trois valeurs EXG-4 sont bien présentes, formatées (jamais un flottant brut) :
+      expect(texte).toContain(formater(resume!.orGagne)) // or gagné
+      expect(texte).toMatch(/\d+ (min|h)/) // temps écoulé formaté (`formaterDuree`)
+      expect(texte).not.toContain('Absence plafonnée') // plafond non atteint : pas le libellé de plafond
+    } finally {
+      rendu1.unmount()
+      storeSansPlafond.arreter()
+    }
+
+    // Cas 2 — absence très longue, au-delà du plafond de rattrapage : « Absence plafonnée à … »
+    const storeAvecPlafond = ouvrirAvecSauvegardeAncienne('onglet-hl-exg4-avec-plafond', SEUIL_HORS_LIGNE_MS * 1000)
+    const rendu2 = render(<Disposition store={storeAvecPlafond} />)
+    try {
+      const resume = storeAvecPlafond.getState().resumeHorsLigne
+      expect(resume).not.toBeNull()
+      expect(resume!.plafondAtteint).toBe(true)
+
+      const texte = rendu2.getByTestId('encart-hors-ligne').textContent!
+      expect(texte).toContain(formater(resume!.orGagne))
+      expect(texte).toMatch(/\d+ (min|h)/)
+      expect(texte).toContain('Absence plafonnée') // le plafond atteint change bien le libellé affiché
+    } finally {
+      rendu2.unmount()
+      storeAvecPlafond.arreter()
+    }
   })
 })
 
@@ -198,27 +290,61 @@ describe('écran de sauvegarde illisible (EXG-27)', () => {
     storeSansSecours.arreter()
   })
 
-  it('« Nouvelle partie » exige une confirmation avant de toucher au stockage', async () => {
-    const store = creerStoreDeTest()
-    const ecritureAvant = store.getState().droitEcriture
-    const { getByRole, unmount } = render(
-      <EcranSauvegardeIllisible
-        store={store}
-        illisible={{ motif: 'jsonIllisible', message: 'JSON invalide', secoursRestaurable: false }}
-      />,
-    )
+  it('« Annuler » à la confirmation : zéro écriture, principal et .bak identiques octet près', async () => {
+    const { store, stockage, ecritures, texteTronque, texteSecoursValide } = ouvrirIllisibleAvecSecoursValide('onglet-illisible-annuler')
+    expect(store.getState().sauvegardeIllisible).not.toBeNull()
+    const illisible = store.getState().sauvegardeIllisible!
+    expect(illisible.secoursRestaurable).toBe(true) // le `.bak` valide de la fixture est bien détecté.
 
-    await userEvent.click(getByRole('button', { name: 'Nouvelle partie' }))
-    const dialogue = getByRole('dialog', { name: 'Repartir de zéro ?' })
-    const annuler = [...dialogue.querySelectorAll('button')].find((b) => b.textContent === 'Annuler')!
-    expect(document.activeElement).toBe(annuler)
+    const { getByRole, unmount } = render(<EcranSauvegardeIllisible store={store} illisible={illisible} />)
 
-    // Annuler : rien n'a changé.
-    await userEvent.click(annuler)
-    expect(() => getByRole('dialog')).toThrow()
-    expect(store.getState().droitEcriture).toBe(ecritureAvant)
+    try {
+      await userEvent.click(getByRole('button', { name: 'Nouvelle partie' }))
+      const dialogue = getByRole('dialog', { name: 'Repartir de zéro ?' })
+      const annuler = [...dialogue.querySelectorAll('button')].find((b) => b.textContent === 'Annuler')!
+      expect(document.activeElement).toBe(annuler)
 
-    unmount()
-    store.arreter()
+      await userEvent.click(annuler)
+      expect(() => getByRole('dialog')).toThrow()
+
+      // Ni le principal ni le `.bak` n'ont été touchés — la fixture reste identique octet près — et
+      // aucune écriture, quelle que soit la clé, n'a eu lieu depuis la mise en place (EXG-27 : « rien
+      // n'est écrit tant que ce n'est pas confirmé »).
+      expect(ecritures.length).toBe(0)
+      expect(stockage.lire(CLE_PRINCIPALE)).toBe(texteTronque)
+      expect(stockage.lire(CLE_SECOURS)).toBe(texteSecoursValide)
+    } finally {
+      unmount()
+      store.arreter()
+    }
+  })
+
+  it('« Confirmer » : le principal est réécrit, le `.bak` valide n’est jamais écrasé', async () => {
+    const { store, stockage, ecritures, texteSecoursValide } = ouvrirIllisibleAvecSecoursValide('onglet-illisible-confirmer')
+    const illisible = store.getState().sauvegardeIllisible!
+
+    const { getByRole, unmount } = render(<EcranSauvegardeIllisible store={store} illisible={illisible} />)
+
+    try {
+      await userEvent.click(getByRole('button', { name: 'Nouvelle partie' }))
+      const dialogue = getByRole('dialog', { name: 'Repartir de zéro ?' })
+      const confirmer = [...dialogue.querySelectorAll('button')].find((b) => b.textContent === 'Confirmer la nouvelle partie')!
+      await userEvent.click(confirmer)
+
+      expect(() => getByRole('dialog')).toThrow()
+
+      // Le principal a bien été écrit (la nouvelle partie prend sa place), mais AUCUNE écriture n'a visé
+      // la clé `.bak` : un principal illisible n'a rien de fiable à y mettre à l'abri (EXG-46 « ne jamais
+      // écraser un `.bak` valide avec une donnée corrompue »).
+      expect(ecritures.some((e) => e.cle === CLE_PRINCIPALE)).toBe(true)
+      expect(ecritures.some((e) => e.cle === CLE_SECOURS)).toBe(false)
+      expect(stockage.lire(CLE_SECOURS)).toBe(texteSecoursValide)
+      expect(stockage.lire(CLE_PRINCIPALE)).not.toBe(texteSecoursValide)
+      expect(store.getState().sauvegardeIllisible).toBeNull()
+      expect(store.getState().droitEcriture).toBe(true)
+    } finally {
+      unmount()
+      store.arreter()
+    }
   })
 })

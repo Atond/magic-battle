@@ -12,11 +12,11 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { N_PROJECTILES_MAX } from '../../src/canvas/constantes.ts'
+import { DUREE_VIE_PROJECTILE_MS, N_PROJECTILES_MAX } from '../../src/canvas/constantes.ts'
 import { demanderEffets } from '../../src/canvas/deltas.ts'
 import type { InstantaneCombat, SortParEcole } from '../../src/canvas/deltas.ts'
 import { CLE_REGLAGES, lireOptionPerformance, resoudrePerformance } from '../../src/canvas/reglages.ts'
-import { ajouterProjectiles } from '../../src/canvas/tampon.ts'
+import { ajouterProjectiles, purgerExpires } from '../../src/canvas/tampon.ts'
 import { creerMatchMediaFactice, creerStockageFactice } from '../state/doubles.ts'
 
 const INSTANTANE_VIDE: InstantaneCombat = { clicsCumules: 0, monstresTues: 0, cooldownsSorts: {} }
@@ -60,7 +60,7 @@ describe('ajouterProjectiles — tampon borné à N_PROJECTILES_MAX (EXG-52)', (
   it('sous le plafond : tout est conservé', () => {
     const demandes = [{ couleur: 'c', type: 'projectile' as const }]
     const { tampon, prochainId } = ajouterProjectiles([], demandes, 1)
-    expect(tampon).toEqual([{ couleur: 'c', type: 'projectile', id: 1 }])
+    expect(tampon).toEqual([{ couleur: 'c', type: 'projectile', id: 1, expireA: 600 }])
     expect(prochainId).toBe(2)
   })
 
@@ -72,6 +72,39 @@ describe('ajouterProjectiles — tampon borné à N_PROJECTILES_MAX (EXG-52)', (
     // Les 50 premiers ids (1..50) ont disparu ; les 200 derniers (51..250) restent, dans l'ordre.
     expect(tampon[0]!.id).toBe(51)
     expect(tampon[tampon.length - 1]!.id).toBe(N_PROJECTILES_MAX + 50)
+  })
+})
+
+describe('demanderEffets — écart de compteur plafonné AVANT construction (EXG-52, T-23b revue)', () => {
+  it('un écart de Number.MAX_SAFE_INTEGER clics ne construit jamais plus de N_PROJECTILES_MAX demandes', () => {
+    const courant: InstantaneCombat = { ...INSTANTANE_VIDE, clicsCumules: Number.MAX_SAFE_INTEGER }
+    const demandes = demanderEffets(INSTANTANE_VIDE, courant, [], 'couleur-clic', 'couleur-impact')
+    expect(demandes.length).toBe(N_PROJECTILES_MAX)
+    expect(demandes.every((d) => d.couleur === 'couleur-clic' && d.type === 'projectile')).toBe(true)
+  },
+  1000)
+
+  it('un écart de Number.MAX_SAFE_INTEGER monstres tués est plafonné de la même façon', () => {
+    const courant: InstantaneCombat = { ...INSTANTANE_VIDE, monstresTues: Number.MAX_SAFE_INTEGER }
+    const demandes = demanderEffets(INSTANTANE_VIDE, courant, [], 'couleur-clic', 'couleur-impact')
+    expect(demandes.length).toBe(N_PROJECTILES_MAX)
+  },
+  1000)
+})
+
+describe('purgerExpires — un projectile disparaît après sa durée de vie (EXG-52 revue)', () => {
+  it('un projectile créé à t=0 est encore là juste avant expiration, disparu juste après', () => {
+    const { tampon } = ajouterProjectiles([], [{ couleur: 'c', type: 'projectile' }], 1, 0)
+    expect(purgerExpires(tampon, DUREE_VIE_PROJECTILE_MS - 1)).toEqual(tampon)
+    expect(purgerExpires(tampon, DUREE_VIE_PROJECTILE_MS + 1)).toEqual([])
+  })
+
+  it('ajouterProjectiles purge lui-même les expirés avant de combiner (un tampon peu renouvelé se vide)', () => {
+    const { tampon: t1 } = ajouterProjectiles([], [{ couleur: 'c', type: 'projectile' }], 1, 0)
+    // Bien après expiration, sans nouvelle demande : le tampon combiné doit repartir de rien plutôt que
+    // de garder le vieux projectile pour de bon.
+    const { tampon: t2 } = ajouterProjectiles(t1, [], 2, DUREE_VIE_PROJECTILE_MS + 1000)
+    expect(t2).toEqual([])
   })
 })
 

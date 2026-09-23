@@ -231,6 +231,27 @@ describe('EXG-32 — miroir DOM des PV de la cible et du timer de boss', () => {
   })
 })
 
+describe('EXG-36 revue — les PV du miroir DOM passent toujours par `formater` (jamais un flottant brut)', () => {
+  it('un pvMax fractionnaire de formule ne s’affiche jamais tel quel (bug réel : « PV 8 / 26.600198804687487 »)', async () => {
+    // Valeur exacte relevée en jeu réel avant correctif : un `pvMax` de formule (flottant) interpolé sans
+    // `formater()`. `formater(26.600198804687487)` doit rendre « 26,6 » (2 décimales, virgule française),
+    // jamais le flottant JS brut à 15 chiffres.
+    const cibleFractionnaire: Monstre = { nom: 'Gobelin fragile', pvMax: 26.600198804687487, pvCourants: 8.2, orAuMeurtre: 1 }
+    const store = creerStoreDeTest({ etatInitialFn: etatAvecCible(cibleFractionnaire) })
+    const { getByTestId, unmount } = render(<CanvasCombat store={store} />)
+
+    try {
+      const texte = getByTestId('pv-cible').textContent!
+      expect(texte).toBe('PV 9 / 26,6')
+      expect(texte).not.toContain('.')
+      expect(texte.match(/,\d+/)?.[0].length).toBeLessThanOrEqual(3) // virgule + au plus 2 décimales
+    } finally {
+      unmount()
+      store.arreter()
+    }
+  })
+})
+
 describe('annonce aria-live — seulement les événements significatifs, jamais la cadence du tick', () => {
   it('vide au montage, puis annonce « vaincu » quand monstresTues augmente — pas avant', async () => {
     const store = creerStoreDeTest({ etatInitialFn: etatAvecCible(CIBLE_MONSTRE) })
@@ -246,6 +267,55 @@ describe('annonce aria-live — seulement les événements significatifs, jamais
 
     unmount()
     store.arreter()
+  })
+})
+
+describe('EXG-52 revue — les jetons var(--x) sont résolus en vraies couleurs avant fillStyle', () => {
+  // Canvas 2D ignore silencieusement `ctx.fillStyle = 'var(--x)'` (ce n'est pas du CSS) : le contexte
+  // garde alors la dernière couleur VALIDE posée dessus. Sans résolution, un projectile de feu hériterait
+  // donc de la couleur du sort précédemment dessiné plutôt que de sa propre couleur d'école — bug réel
+  // relevé en revue. La preuve : lire `ctx.fillStyle` juste après le dessin d'un projectile de sort, et
+  // vérifier qu'il ne s'agit JAMAIS de la chaîne `var(...)` brute (le navigateur normalise toute couleur
+  // acceptée en `#rrggbb`/`rgb(...)`, jamais en `var(...)`).
+  it('un sort de feu qui vient de partir dessine avec une vraie couleur, jamais la chaîne var(...) brute', async () => {
+    const store = creerStoreDeTest({ etatInitialFn: etatAvecCible(CIBLE_MONSTRE) })
+    const { getByTestId, unmount } = render(<CanvasCombat store={store} />)
+    const canvas = getByTestId('canvas-combat') as HTMLCanvasElement
+    const ctx = canvas.getContext('2d')!
+
+    await attendreFrames(1)
+    // Déclenche réellement le sort de Feu (action du moteur) : son cooldown passe de 0 à plein, la hausse
+    // que `demanderEffets` interprète comme « ce sort vient de partir » (voir tests/ui/canvas-deltas.test.ts).
+    store.getState().actions.lancerSort('sort-feu')
+
+    const fillStylesVus: string[] = []
+    const original = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'fillStyle')!
+    Object.defineProperty(ctx, 'fillStyle', {
+      configurable: true,
+      get() {
+        return original.get!.call(this)
+      },
+      set(v: string) {
+        fillStylesVus.push(v)
+        original.set!.call(this, v)
+      },
+    })
+
+    await attendreFrames(3)
+
+    try {
+      expect(fillStylesVus.length).toBeGreaterThan(0)
+      for (const valeur of fillStylesVus) {
+        expect(valeur.startsWith('var(')).toBe(false)
+      }
+    } finally {
+      // `try/finally` plutôt qu'un simple appel en fin de test : un échec d'assertion ci-dessus ne doit
+      // jamais laisser ce composant monté pour le test suivant (pas de `cleanup()` global dans ce
+      // fichier — chaque test démonte explicitement) — sinon un `getByTestId` suivant trouve deux
+      // `<canvas>` et le vrai signal se noie dans un faux échec en cascade.
+      unmount()
+      store.arreter()
+    }
   })
 })
 

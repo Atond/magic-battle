@@ -1,6 +1,22 @@
 // Constantes **d'ingénierie** de la couche pont (préfixage, cadence du verrou) — à ne pas confondre avec
 // les valeurs d'équilibrage de `src/donnees/constantes.ts` (sortie du simulateur, jamais ici).
 
+import { PAS_TICK_MS } from '../domain/constantes-moteur.ts'
+import type { Constantes } from '../domain/types.ts'
+
+/**
+ * EXG-55 — seuil de temps non traité au-delà duquel le rattrapage passe par `calculHorsLigne` plutôt que
+ * par la forme fermée d'`appliquerDelta`, et donc seuil en dessous duquel l'encart hors-ligne ne
+ * s'affiche jamais (spec T-23b). Une seule fonction, réutilisée par `store.ts` (décision de rattrapage)
+ * et `EncartHorsLigne.tsx` (décision d'affichage) : `nTicksMax × PAS_TICK_MS` ne dérivait auparavant que
+ * dans les deux fichiers séparément — un seul écart entre les deux aurait fait apparaître l'encart sans
+ * que le rattrapage ait réellement eu lieu, ou l'inverse.
+ */
+export function seuilRattrapageMs(constantes: Pick<Constantes, 'tick'>): number {
+  const seuil = constantes.tick.nTicksMax
+  return Number.isFinite(seuil) && seuil > 0 ? seuil * PAS_TICK_MS : 0
+}
+
 /** ADR-21 — GitHub Pages partage l'origine entre dépôts : toute clé de stockage/canal est préfixée. */
 export const PREFIXE_STOCKAGE = 'magic-battle:'
 

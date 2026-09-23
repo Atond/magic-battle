@@ -56,6 +56,13 @@ function ModalePrestige({
   readonly onFermer: () => void
 }) {
   const [etape, setEtape] = useState<Etape>('aperçu')
+  // EXG-21 / T-23b — « gain affiché au clic, pas recalculé pendant que la modale est ouverte » : figé au
+  // passage à l'étape de confirmation, jamais relu en direct ensuite. `null` tant que l'étape 1 est
+  // affichée (aucun gain figé à montrer). `store.actions.prestige` reçoit ce même nombre : le domaine
+  // recalcule toujours le gain à partir de l'état courant (ce n'est pas sa responsabilité de geler quoi
+  // que ce soit), donc c'est cette couche qui corrige l'écart pour créditer exactement ce qui a été
+  // montré (voir `src/state/store.ts`).
+  const [gainFige, setGainFige] = useState<number | null>(null)
   const annulerRef = useRef<HTMLButtonElement>(null)
   // Sélecteurs fins : chacun retourne une primitive (jamais l'objet `ApercuPrestige` entier), condition
   // documentée par `src/state/hooks.ts` — `useSyncExternalStore` compare par `Object.is` et boucle à
@@ -64,13 +71,19 @@ function ModalePrestige({
   const zoneMaxDuRun = useStoreJeu(store, (s) => apercuPrestige(s.etat, CONSTANTES).zoneMaxDuRun)
   const perteOr = useStoreJeu(store, (s) => apercuPrestige(s.etat, CONSTANTES).perte.or)
   const perteNiveaux = useStoreJeu(store, (s) => apercuPrestige(s.etat, CONSTANTES).perte.niveauxEcoles)
-  const eclatsGagnes = useStoreJeu(store, (s) => apercuPrestige(s.etat, CONSTANTES).eclatsGagnes)
+  const eclatsGagnesEnDirect = useStoreJeu(store, (s) => apercuPrestige(s.etat, CONSTANTES).eclatsGagnes)
   const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
   const prestige = useStoreJeu(store, (s) => s.actions.prestige)
 
   function fermer(): void {
     setEtape('aperçu')
+    setGainFige(null)
     onFermer()
+  }
+
+  function continuer(): void {
+    setGainFige(eclatsGagnesEnDirect)
+    setEtape('confirmation')
   }
 
   const desactive = !disponible || lectureSeule
@@ -104,7 +117,7 @@ function ModalePrestige({
             <button
               type="button"
               disabled={desactive}
-              onClick={() => setEtape('confirmation')}
+              onClick={continuer}
               className="min-h-6 min-w-20 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {TEXTES_UI.prestige.etape1Continuer}
@@ -114,9 +127,9 @@ function ModalePrestige({
       ) : (
         <>
           <p className="text-sm text-[var(--couleur-charbon-texte)]" data-testid="prestige-gain">
-            {eclatsGagnes > 1
-              ? TEXTES_UI.prestige.etape2GainPluriel(formater(eclatsGagnes))
-              : TEXTES_UI.prestige.etape2Gain(formater(eclatsGagnes))}
+            {(gainFige ?? 0) > 1
+              ? TEXTES_UI.prestige.etape2GainPluriel(formater(gainFige ?? 0))
+              : TEXTES_UI.prestige.etape2Gain(formater(gainFige ?? 0))}
           </p>
           <div className="flex justify-end gap-2">
             <button
@@ -131,7 +144,7 @@ function ModalePrestige({
               type="button"
               disabled={desactive}
               onClick={() => {
-                prestige()
+                prestige(gainFige ?? 0)
                 fermer()
               }}
               className="min-h-6 min-w-20 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -155,19 +168,27 @@ function ModaleAscension({
   readonly onFermer: () => void
 }) {
   const [etape, setEtape] = useState<Etape>('aperçu')
+  // Même gel qu'en prestige (voir `ModalePrestige`) : figé au passage à l'étape de confirmation.
+  const [gainFige, setGainFige] = useState<number | null>(null)
   const annulerRef = useRef<HTMLButtonElement>(null)
   // Mêmes contraintes que `ModalePrestige` : sélecteurs fins, jamais l'objet `ApercuAscension` entier.
   const disponible = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).disponible)
   const perteOr = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).perte.or)
   const perteNiveaux = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).perte.niveauxEcoles)
-  const pointsGagnes = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).pointsGagnes)
+  const pointsGagnesEnDirect = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).pointsGagnes)
   const debloqueSixiemeEcole = useStoreJeu(store, (s) => apercuAscension(s.etat, CONSTANTES).debloqueSixiemeEcole)
   const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
   const ascensionner = useStoreJeu(store, (s) => s.actions.ascensionner)
 
   function fermer(): void {
     setEtape('aperçu')
+    setGainFige(null)
     onFermer()
+  }
+
+  function continuer(): void {
+    setGainFige(pointsGagnesEnDirect)
+    setEtape('confirmation')
   }
 
   const desactive = !disponible || lectureSeule
@@ -199,7 +220,7 @@ function ModaleAscension({
             <button
               type="button"
               disabled={desactive}
-              onClick={() => setEtape('confirmation')}
+              onClick={continuer}
               className="min-h-6 min-w-20 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {TEXTES_UI.ascension.etape1Continuer}
@@ -209,9 +230,9 @@ function ModaleAscension({
       ) : (
         <>
           <p className="text-sm text-[var(--couleur-charbon-texte)]" data-testid="ascension-gain">
-            {pointsGagnes > 1
-              ? TEXTES_UI.ascension.etape2GainPluriel(formater(pointsGagnes))
-              : TEXTES_UI.ascension.etape2Gain(formater(pointsGagnes))}
+            {(gainFige ?? 0) > 1
+              ? TEXTES_UI.ascension.etape2GainPluriel(formater(gainFige ?? 0))
+              : TEXTES_UI.ascension.etape2Gain(formater(gainFige ?? 0))}
           </p>
           {debloqueSixiemeEcole && (
             <p className="text-sm text-[var(--couleur-charbon-texte-attenue)]">{TEXTES_UI.ascension.etape2Ecole}</p>
@@ -229,7 +250,7 @@ function ModaleAscension({
               type="button"
               disabled={desactive}
               onClick={() => {
-                ascensionner()
+                ascensionner(gainFige ?? 0)
                 fermer()
               }}
               className="min-h-6 min-w-20 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"

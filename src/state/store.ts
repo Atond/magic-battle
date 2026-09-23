@@ -25,7 +25,7 @@
 import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
 
-import { PAS_TICK_MS, INTERVALLE_AUTOSAVE_MS } from '../domain/constantes-moteur.ts'
+import { INTERVALLE_AUTOSAVE_MS } from '../domain/constantes-moteur.ts'
 import { appliquerClic, appliquerDelta, calculHorsLigne, lancerSort } from '../domain/moteur.ts'
 import {
   NOM_PRINCIPAL,
@@ -42,7 +42,7 @@ import { acheterNiveaux } from '../domain/ecoles/index.ts'
 import { acheterAmelioration } from '../domain/ameliorations/index.ts'
 import { acheterEquipement } from '../domain/equipement/index.ts'
 import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
-import { prestiger } from '../domain/prestige/index.ts'
+import { prestiger, sommeBornee } from '../domain/prestige/index.ts'
 import { ascensionner } from '../domain/ascension/index.ts'
 import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
@@ -52,6 +52,7 @@ import {
   INTERVALLE_BATTEMENT_VERROU_MS,
   NOM_VERROU,
   PREFIXE_STOCKAGE,
+  seuilRattrapageMs,
 } from './constantes.ts'
 import { ETAPES_DEMARRAGE } from './demarrage.ts'
 import type { EtapeDemarrage } from './demarrage.ts'
@@ -100,12 +101,20 @@ export interface ActionsStoreJeu {
   readonly acheterNoeudEclats: (id: string) => void
   /**
    * EXG-19 / EXG-21 — étape 2 du prestige : applique `prestiger` (`src/domain/prestige/index.ts`). Même
-   * garde que `clic` (aucun effet hors mode `actif`, donc pas en lecture seule) ; l'aperçu (étape 1, gain
-   * affiché) se lit séparément via `apercuPrestige`, jamais recalculé ici.
+   * garde que `clic` (aucun effet hors mode `actif`, donc pas en lecture seule).
+   *
+   * `gainFige` — le gain affiché à l'ouverture de l'étape de confirmation (spec T-23b : « gain affiché
+   * au clic, pas recalculé pendant que la modale est ouverte »). Le domaine, lui, recalcule toujours le
+   * gain au moment de `prestiger` à partir de l'état **courant** (il n'a aucune notion de modale ni de
+   * gel d'affichage — ce n'est pas sa responsabilité). Si des ticks ont fait progresser `zoneMaxDuRun`
+   * pendant que la modale était ouverte, le gain réel peut donc différer du gain figé affiché : cette
+   * action corrige l'écart après coup (Éclats du cycle, Éclats à vie) pour que le joueur reçoive
+   * exactement ce qui lui a été montré, sans toucher au domaine.
    */
-  readonly prestige: () => void
-  /** EXG-20 / EXG-21 — étape 2 de l'Ascension : applique `ascensionner`, même garde. */
-  readonly ascensionner: () => void
+  readonly prestige: (gainFige: number) => void
+  /** EXG-20 / EXG-21 — étape 2 de l'Ascension : applique `ascensionner`, même garde et même correction
+   *  d'écart que `prestige` (Points d'Ascension). */
+  readonly ascensionner: (gainFige: number) => void
   /**
    * EXG-24 / EXG-46 — importe un texte d'export (sans UI : T-28 branchera le champ). Import confirmé ⇒
    * l'état courant part dans `.bak` (sauf principal illisible : aucune copie, EXG-46), puis le principal
@@ -275,8 +284,39 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
         acheterAmelioration: (id) => jouer((etat) => acheterAmelioration(etat, id, CONSTANTES).etat),
         acheterEquipement: (id) => jouer((etat) => acheterEquipement(etat, id, CONSTANTES).etat),
         acheterNoeudEclats: (id) => jouer((etat) => acheterNoeudArbre(etat, id, 1, 'eclats', CONSTANTES).etat),
-        prestige: () => jouer((etat) => prestiger(etat, CONSTANTES).etat),
-        ascensionner: () => jouer((etat) => ascensionner(etat, CONSTANTES).etat),
+        prestige: (gainFige) =>
+          jouer((etat) => {
+            const resultat = prestiger(etat, CONSTANTES)
+            if (!resultat.accepte) return etat
+            const ecart = gainFige - resultat.gain
+            if (ecart === 0) return resultat.etat
+            return {
+              ...resultat.etat,
+              bourse: {
+                ...resultat.etat.bourse,
+                eclatsPossedes: Math.max(0, sommeBornee(resultat.etat.bourse.eclatsPossedes, ecart)),
+                eclatsDepensables: Math.max(0, sommeBornee(resultat.etat.bourse.eclatsDepensables, ecart)),
+              },
+              prestige: {
+                ...resultat.etat.prestige,
+                eclatsCumulesAVie: Math.max(0, sommeBornee(resultat.etat.prestige.eclatsCumulesAVie, ecart)),
+              },
+            }
+          }),
+        ascensionner: (gainFige) =>
+          jouer((etat) => {
+            const resultat = ascensionner(etat, CONSTANTES)
+            if (!resultat.accepte) return etat
+            const ecart = gainFige - resultat.gain
+            if (ecart === 0) return resultat.etat
+            return {
+              ...resultat.etat,
+              bourse: {
+                ...resultat.etat.bourse,
+                pointsAscension: Math.max(0, sommeBornee(resultat.etat.bourse.pointsAscension, ecart)),
+              },
+            }
+          }),
         importer: (texte) => importer(texte),
         restaurerSecours: () => restaurer(),
         nouvellePartie: () => nouvellePartie(),
@@ -412,11 +452,6 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
 
   /* ────────────────────────────────────────────────────────── boucle (hors React, EXG-1 à EXG-3) */
 
-  const seuilRattrapageMs = (): number => {
-    const seuil = CONSTANTES.tick.nTicksMax
-    return Number.isFinite(seuil) && seuil > 0 ? seuil * PAS_TICK_MS : 0
-  }
-
   function traiterDelta(deltaMs: number, maintenantMs: number): void {
     accumulNonTraiteMs += deltaMs
     const etatCourant = store.getState().etat
@@ -424,7 +459,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     // EXG-55 — au-delà du seuil `nTicksMax × PAS_TICK_MS` de temps non traité (onglet revenu de `hidden`,
     // veille système sans `visibilitychange`…), le rattrapage passe par `calculHorsLigne`, jamais par la
     // forme fermée d'`appliquerDelta`.
-    if (accumulNonTraiteMs > seuilRattrapageMs()) {
+    if (accumulNonTraiteMs > seuilRattrapageMs(CONSTANTES)) {
       // Comparaison d'horloge dédiée (EXG-55) : l'absence commence au dernier instant traité par la
       // boucle, pas à la dernière écriture. `etat.derniereSauvegardeMs` en mémoire date du démarrage
       // (les sauvegardes n'y touchent pas) : s'y fier créditerait toute la session de jeu au premier

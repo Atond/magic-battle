@@ -45,7 +45,11 @@ export const TEXTES_UI = {
     titre: 'Combat',
     boutonClic: 'Frapper',
     aucuneCible: 'Rien à taper pour l’instant.',
-    pv: (courants: number, max: number) => `PV ${courants} / ${max}`,
+    // §8 « Notation » — `courants`/`max` sont déjà passés formatés (`src/domain/notation.ts`) par
+    // l'appelant : cette fonction ne fait QUE composer le texte, jamais interpoler un nombre brut (un
+    // `pvMax` de formule est un flottant, jamais un entier — l'afficher tel quel a déjà produit
+    // « PV 8 / 26.600198804687487 » en jeu réel).
+    pv: (courants: string, max: string) => `PV ${courants} / ${max}`,
     timerBoss: (secondes: number) => `Boss — ${secondes} s`,
     monstreVaincu: (nom: string) => `${nom || 'Le monstre'} est tombé.`,
     bossEnApproche: (nom: string) => `${nom || 'Un boss'} entre en scène.`,

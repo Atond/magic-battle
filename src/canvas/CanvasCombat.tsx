@@ -16,6 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { formater } from '../domain/notation.ts'
 import type { Boss, Monstre } from '../domain/types.ts'
 import { SORTS } from '../donnees/sorts.ts'
 import { TEXTES_UI } from '../donnees/textes-ui.ts'
@@ -26,7 +27,7 @@ import type { InstantaneCombat, SortParEcole } from './deltas.ts'
 import { dessinerScene } from './dessin.ts'
 import { InterrupteurPerformance } from './InterrupteurPerformance.tsx'
 import { resoudrePerformance } from './reglages.ts'
-import { ajouterProjectiles } from './tampon.ts'
+import { ajouterProjectiles, purgerExpires } from './tampon.ts'
 import type { Projectile } from './tampon.ts'
 
 const COULEUR_CLIC = 'var(--couleur-charbon-texte)'
@@ -76,7 +77,9 @@ function MiroirCombat({ store }: { readonly store: StoreJeuApi }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 p-2 text-xs font-medium">
       <span data-testid="pv-cible" className={badge}>
-        {cible === null ? TEXTES_UI.combat.aucuneCible : TEXTES_UI.combat.pv(Math.ceil(cible.pvCourants), cible.pvMax)}
+        {cible === null
+          ? TEXTES_UI.combat.aucuneCible
+          : TEXTES_UI.combat.pv(formater(Math.ceil(cible.pvCourants)), formater(cible.pvMax))}
       </span>
       {boss && timerBossRestantMs !== null && (
         <span data-testid="timer-boss" className={badge}>
@@ -97,6 +100,12 @@ export function CanvasCombat({ store }: { readonly store: StoreJeuApi }) {
   const tamponRef = useRef<readonly Projectile[]>([])
   const prochainIdRef = useRef(1)
   const performanceRef = useRef(resoudrePerformance(store.stockage, store.matchMedia))
+  // Canvas 2D n'interprète jamais `var(--x)` : `ctx.fillStyle = 'var(--couleur-ecole-feu)'` est
+  // silencieusement ignoré et le projectile hérite de la dernière couleur valide posée sur le contexte
+  // (bug réel observé : les projectiles de feu prenaient la couleur du sort précédent). On résout donc
+  // chaque jeton `var(--x)` en couleur réelle via `getComputedStyle`, en cache pour éviter de le refaire
+  // à chaque frame — le cache est vidé au montage et à chaque changement de thème (`.dark` sur `<html>`).
+  const couleursResoluesRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -104,6 +113,23 @@ export function CanvasCombat({ store }: { readonly store: StoreJeuApi }) {
     if (canvas === null || conteneur === null) return
     const ctx = canvas.getContext('2d')
     if (ctx === null) return
+
+    function resoudreCouleur(brute: string): string {
+      const correspondance = /^var\((--[\w-]+)\)$/.exec(brute)
+      if (correspondance === null) return brute
+      const cache = couleursResoluesRef.current
+      const enCache = cache.get(brute)
+      if (enCache !== undefined) return enCache
+      const valeur = getComputedStyle(document.documentElement).getPropertyValue(correspondance[1]!).trim()
+      const resolue = valeur !== '' ? valeur : brute
+      cache.set(brute, resolue)
+      return resolue
+    }
+
+    // Un changement de thème (`.dark` posé/retiré sur `<html>`) change les valeurs réelles derrière les
+    // mêmes jetons : le cache doit être vidé, pas seulement rempli une fois au montage.
+    const observateurTheme = new MutationObserver(() => couleursResoluesRef.current.clear())
+    observateurTheme.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 
     let idFrame: number | null = null
 
@@ -149,13 +175,19 @@ export function CanvasCombat({ store }: { readonly store: StoreJeuApi }) {
       const { largeur, hauteur } = redimensionner()
       const etat = store.getState().etat
       const instantane = extraireInstantane(etat)
+      const maintenantMs = performance.now()
 
       if (precedentRef.current !== null && !performanceRef.current) {
         const demandes = demanderEffets(precedentRef.current, instantane, SORTS_PAR_ECOLE, COULEUR_CLIC, COULEUR_IMPACT)
         if (demandes.length > 0) {
-          const resultat = ajouterProjectiles(tamponRef.current, demandes, prochainIdRef.current)
+          const demandesResolues = demandes.map((demande) => ({ ...demande, couleur: resoudreCouleur(demande.couleur) }))
+          const resultat = ajouterProjectiles(tamponRef.current, demandesResolues, prochainIdRef.current, maintenantMs)
           tamponRef.current = resultat.tampon
           prochainIdRef.current = resultat.prochainId
+        } else {
+          // Aucune nouvelle demande cette frame : purger quand même les expirés, sinon un tampon peu
+          // renouvelé garde des cercles figés à l'écran jusqu'au prochain clic/sort.
+          tamponRef.current = purgerExpires(tamponRef.current, maintenantMs)
         }
       }
       precedentRef.current = instantane
@@ -177,6 +209,7 @@ export function CanvasCombat({ store }: { readonly store: StoreJeuApi }) {
     idFrame = window.requestAnimationFrame(frame)
     return () => {
       if (idFrame !== null) window.cancelAnimationFrame(idFrame)
+      observateurTheme.disconnect()
     }
   }, [store])
 

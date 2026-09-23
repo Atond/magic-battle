@@ -11,17 +11,12 @@
 
 import { useEffect, useState } from 'react'
 
-import { PAS_TICK_MS } from '../../domain/constantes-moteur.ts'
 import { formater } from '../../domain/notation.ts'
 import { CONSTANTES } from '../../donnees/constantes.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
+import { seuilRattrapageMs } from '../../state/constantes.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
-
-function seuilAffichageMs(): number {
-  const seuil = CONSTANTES.tick.nTicksMax
-  return Number.isFinite(seuil) && seuil > 0 ? seuil * PAS_TICK_MS : 0
-}
 
 /** Présentation seulement (pas une formule de jeu) : minutes sous l'heure, heures + minutes au-delà. */
 function formaterDuree(ms: number): string {
@@ -42,7 +37,7 @@ export function EncartHorsLigne({ store }: { readonly store: StoreJeuApi }) {
   }, [resume])
 
   if (resume === null || ferme) return null
-  if (resume.tempsEcouleMs <= seuilAffichageMs()) return null
+  if (resume.tempsEcouleMs <= seuilRattrapageMs(CONSTANTES)) return null
 
   const or = formater(resume.orGagne)
   const duree = formaterDuree(resume.tempsEcouleMs)
