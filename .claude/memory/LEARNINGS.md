@@ -82,3 +82,20 @@
   il faut les deux. Une commande sudo ne passe pas par `! …` dans Claude Code (aucun terminal pour le mot de
   passe) : la donner à l'utilisateur pour un terminal séparé. Et c'est précisément le cas où un « Chromium
   absent = ignoré » aurait laissé la porte de qualité verte sans un seul test navigateur exécuté.
+
+## LRN-008 — La vague 2 a coûté 163 $ pour 4-5 $ estimés : le coût est dans l'orchestration et les boucles de preuve, pas dans les tâches (2026-09-23)
+- **Ce qu'on retient :** l'estimation comptait « une tâche Sonnet ≈ 0,2-0,3 $ ». En réalité, les agents UI
+  ont tourné de 10 à 130 min avec 50 à 370 appels d'outils chacun (T-19 : 2 h 11 ; T-22 : 77 min, ~530 k
+  tokens ; T-23b : 45 min) : chaque garde-fou vu rouge relance un test navigateur, chaque relance relit
+  des sorties longues. Et la session d'orchestration elle-même, en Opus à contexte long, repaie tout son
+  contexte à chaque tour : interview, deux tours de challenge, dix rapports d'agent, captures d'écran,
+  hook Stop qui relance `verify.sh` à chaque fin de tour.
+- **La règle :**
+  1. Estimer en **minutes d'agent et en appels d'outils**, pas en tâches : 1 tâche UI avec preuve du rouge
+     ≈ 30-90 min d'agent. Recaler §11 de la spec sur le coût réel (`/usage`) à chaque fin de vague.
+  2. Une session par vague, **courte** : cadrage (interview + spec) dans une session, exécution dans une
+     autre, qui repart de la spec et du plan plutôt que de tout l'historique.
+  3. Borner chaque agent : un budget écrit dans la consigne (« rends la main après ~40 appels ou 45 min
+     avec l'état d'avancement »), et regrouper les injections de fautes en un seul script (candidat
+     `rouge-par-lot`, remonté deux fois en vague 2).
+  4. Dire le coût mesuré, jamais un ordre de grandeur non mesuré présenté comme une estimation.
