@@ -56,3 +56,13 @@
 - **Résolution :** `npm run equilibrage:empreinte` — régénération en mémoire depuis le vecteur archivé et
   comparaison champ par champ, 0,2 s, huitième étape de `verify.sh` ; plus 20 tests Vitest sur les deux
   sens des dérogations et les clés orphelines. → [[LRN-004]]
+
+## BLK-005 — Chromium de Playwright ne démarre pas sous WSL2 : bibliothèques système absentes — Résolu (2026-09-23)
+- **Contexte :** T-18a. `npx playwright install chromium` télécharge le binaire, mais celui-ci meurt au
+  lancement (`libnspr4.so: cannot open shared object file`, 32 bibliothèques manquantes au total). `verify.sh`
+  est rouge sur `test (vitest)`, et c'est voulu : pas de chemin de saut pour les tests navigateur (§12 v10).
+- **Cause :** les dépendances système de Chromium (`libnss3`, `libnspr4`, `libasound2t64`…) ne viennent pas
+  avec npm ; `npx playwright install-deps chromium` les installe via apt et exige sudo, hors périmètre agent.
+- **Résolution :** l'utilisateur a lancé `sudo npx playwright install-deps chromium` dans un terminal à
+  part (`! sudo …` échoue dans Claude Code : pas de terminal pour saisir le mot de passe). `verify.sh` vert,
+  test navigateur vu rouge sur une cible injectée à 40 px. En CI, même commande sur le runner. → [[LRN-007]]

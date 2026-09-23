@@ -65,3 +65,20 @@
   c'est précisément ce à quoi sert un historique.
 - **La règle :** tant qu'un agent tourne, on stage des **chemins explicites**, jamais `-A` ni `.`. Et on
   regarde `git status` avant de commiter, pas après.
+
+## LRN-006 — Un agent créé en cours de session n'est pas appelable tout de suite (2026-09-23)
+- **Ce qu'on retient :** `implementeur-ui`, créé puis commité le 2026-09-23, a d'abord été refusé par
+  l'outil Agent (« Agent type not found »), puis est apparu plus tard dans **la même** session : la liste
+  des agents se recharge en différé, pas au moment de l'écriture du fichier. Repli qui marche entre les
+  deux : un agent `general-purpose` au modèle voulu, dont la première consigne est de lire le fichier de
+  l'agent et de l'appliquer comme prompt système.
+- **La règle :** ne pas bloquer une tâche sur un agent tout juste créé ; utiliser le repli, et appeler
+  l'agent par son nom dès qu'il est listé. Même cas attendu pour `narrateur` au début de la vague 3.
+
+## LRN-007 — Sous WSL2, « Chromium installé » ne veut pas dire « Chromium démarre » (2026-09-23)
+- **Issu de :** [[BLK-005]]
+- **Ce qu'on retient :** `npx playwright install chromium` ne télécharge que le binaire ; ses bibliothèques
+  système viennent d'apt (`npx playwright install-deps chromium`, sudo). Sur un poste neuf ou un runner CI,
+  il faut les deux. Une commande sudo ne passe pas par `! …` dans Claude Code (aucun terminal pour le mot de
+  passe) : la donner à l'utilisateur pour un terminal séparé. Et c'est précisément le cas où un « Chromium
+  absent = ignoré » aurait laissé la porte de qualité verte sans un seul test navigateur exécuté.
