@@ -10,7 +10,7 @@ description: >
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__plugin_context7_context7__resolve-library-id, mcp__plugin_context7_context7__query-docs
 model: sonnet
 effort: medium
-skills: preuve-du-rouge, vercel:shadcn, vercel:react-best-practices
+skills: preuve-du-rouge, test-navigateur-ui, vercel:shadcn, vercel:react-best-practices
 ---
 <!-- source: spec.md §16 T-18-agent/T-18a..T-23b, ADR-19/20/21 (§15), §7 (UX/accessibilité), §12 (qualité
      tests navigateur) ; integrations.md ligne « UI vague 2 » ; LRN-002/004/005 ; frontmatter calqué sur
