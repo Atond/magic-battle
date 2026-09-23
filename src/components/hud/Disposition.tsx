@@ -16,6 +16,7 @@ import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { BandeauHaut } from './BandeauHaut.tsx'
 import { BandeauLectureSeule } from './BandeauLectureSeule.tsx'
+import { EcranFin, selecteurFinAtteinte } from './EcranFin.tsx'
 import { EncartHorsLigne } from './EncartHorsLigne.tsx'
 import { EncartNarration } from './EncartNarration.tsx'
 import { EncartStockagePlein } from './EncartStockagePlein.tsx'
@@ -27,6 +28,7 @@ import { PanneauEcoles } from './PanneauEcoles.tsx'
 import { PanneauEquipement } from './PanneauEquipement.tsx'
 import { PanneauPrestige } from './PanneauPrestige.tsx'
 import { PanneauQuetes } from './PanneauQuetes.tsx'
+import { useStoreJeu } from '../../state/hooks.ts'
 import { useUneModaleEstOuverte } from './modaleOuverteGlobale.ts'
 
 type OngletMobile = 'ecoles' | 'ameliorations' | 'prestige'
@@ -111,6 +113,12 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
   // coordonnées écran qu'elle, ambigu pour un lecteur d'écran en mode « parcourir » comme pour un audit
   // géométrique automatisé.
   const modaleOuverte = useUneModaleEstOuverte()
+
+  // EXG-28 — écran de fin dédié dès que le moteur a figé les statistiques ; le joueur peut revenir au
+  // HUD (l'or continue de tomber), le choix ne vit que le temps de la session.
+  const finAtteinte = useStoreJeu(store, selecteurFinAtteinte)
+  const [finVue, setFinVue] = useState(false)
+  if (finAtteinte && !finVue) return <EcranFin store={store} onContinuer={() => setFinVue(true)} />
 
   return (
     <div className="min-h-screen bg-[var(--couleur-charbon-950)]">
