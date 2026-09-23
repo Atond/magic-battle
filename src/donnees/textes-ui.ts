@@ -28,7 +28,7 @@ export const TEXTES_UI = {
   ecoles: {
     titre: 'Écoles',
     verrouillee: 'École scellée',
-    verrouilleeDetail: 'Un boss de zone la révélera.',
+    verrouilleeDetail: 'Un boss la garde sous clé. Tape-le, elle est à toi.',
     niveau: (niveau: number) => `Niveau ${niveau}`,
     acheter: 'Étudier',
     noms: {
@@ -51,7 +51,7 @@ export const TEXTES_UI = {
     // « PV 8 / 26.600198804687487 » en jeu réel).
     pv: (courants: string, max: string) => `PV ${courants} / ${max}`,
     timerBoss: (secondes: number) => `Boss — ${secondes} s`,
-    monstreVaincu: (nom: string) => `${nom || 'Le monstre'} est tombé.`,
+    monstreVaincu: (nom: string) => `${nom || 'Le monstre'} mord la poussière.`,
     bossEnApproche: (nom: string) => `${nom || 'Un boss'} entre en scène.`,
     interrupteurPerformance: 'Effets visuels de combat',
     performanceActivee: 'Effets réduits',
@@ -69,7 +69,7 @@ export const TEXTES_UI = {
 
   ameliorations: {
     titre: 'Améliorations',
-    sousTitre: 'Payées en or.',
+    sousTitre: 'Payées en or, celui qui bosse même quand tu dors.',
     acheter: 'Améliorer',
     palier: (palier: number) => `Palier ${palier}`,
     noms: {
@@ -80,7 +80,7 @@ export const TEXTES_UI = {
 
   equipement: {
     titre: 'Équipement',
-    sousTitre: 'Payé en Renommée.',
+    sousTitre: 'Payé en Renommée. La gloire, ça se dépense aussi.',
     acheter: 'Équiper',
     palier: (palier: number) => `Palier ${palier}`,
     noms: {
@@ -91,7 +91,7 @@ export const TEXTES_UI = {
 
   arbreEclats: {
     titre: 'Arbre d’Éclats',
-    sousTitre: 'Remis à zéro à chaque Ascension.',
+    sousTitre: 'Remis à zéro à chaque Ascension. Profites-en tant que ça dure.',
     acheter: 'Investir',
     rang: (rang: number) => `Rang ${rang}`,
     rangMax: 'Rang maximal atteint',
@@ -117,7 +117,7 @@ export const TEXTES_UI = {
 
   prestige: {
     titre: 'Prestige',
-    description: 'Recommence le run, garde des Éclats.',
+    description: 'Recommence le run, garde des Éclats. Oui, c’est voulu.',
     bouton: 'Prestiger',
     boutonVerrouille: 'Partie terminée',
     etape1Titre: 'Recommencer le run ?',
@@ -155,7 +155,7 @@ export const TEXTES_UI = {
 
   horsLigne: {
     titre: 'Pendant ton absence',
-    resume: (or: string, duree: string) => `${duree} d’absence, ${or} or gagné.`,
+    resume: (or: string, duree: string) => `${duree} d’absence, ${or} or gagné. Lui au moins, il bosse.`,
     plafond: (or: string, duree: string) => `Absence plafonnée à ${duree} — ${or} or gagné, le reste n’a pas compté.`,
   },
 
