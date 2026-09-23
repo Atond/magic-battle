@@ -46,9 +46,9 @@ function exigerPrefixe(cle: string): void {
 }
 
 /**
- * EXG-22 / ADR-21 — `localStorage` réel. Chaque accès est en `try/catch` : navigation privée, quota
+ * EXG-22 / ADR-21 — `localStorage` réel. Lecture et suppression sont en `try/catch` : navigation privée, quota
  * plein ou stockage désactivé ne doivent jamais faire tomber la boucle. Une lecture impossible vaut
- * « absent » ; une écriture impossible est perdue (la prochaine sauvegarde réessaiera).
+ * « absent ». Une écriture impossible **lève** : c'est `creerStoreJeu` qui l'intercepte et l'affiche.
  */
 export function creerStockageLocal(): Stockage {
   return {
@@ -62,11 +62,10 @@ export function creerStockageLocal(): Stockage {
     },
     ecrire: (cle, valeur) => {
       exigerPrefixe(cle)
-      try {
-        window.localStorage.setItem(cle, valeur)
-      } catch {
-        // Quota ou stockage indisponible : rien à faire de plus sans UI (hors périmètre T-23a).
-      }
+      // Pas de `try/catch` ici : un quota plein (`QuotaExceededError`) ou un stockage refusé remonte au
+      // store, qui l'intercepte (la boucle ne tombe jamais) et prévient le joueur que sa progression
+      // n'est plus sauvegardée (`stockagePlein`).
+      window.localStorage.setItem(cle, valeur)
     },
     supprimer: (cle) => {
       exigerPrefixe(cle)

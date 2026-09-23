@@ -18,6 +18,7 @@ import { BandeauHaut } from './BandeauHaut.tsx'
 import { BandeauLectureSeule } from './BandeauLectureSeule.tsx'
 import { EncartHorsLigne } from './EncartHorsLigne.tsx'
 import { EncartNarration } from './EncartNarration.tsx'
+import { EncartStockagePlein } from './EncartStockagePlein.tsx'
 import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
@@ -116,6 +117,7 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
       <div className={modaleOuverte ? 'hidden' : undefined} aria-hidden={modaleOuverte || undefined}>
         <BandeauHaut store={store} />
         <BandeauLectureSeule store={store} />
+        <EncartStockagePlein store={store} />
         <EncartHorsLigne store={store} />
         <EncartNarration store={store} />
         {/* T-22, règle axe `region` : tout le contenu visible doit vivre dans un point de repère. Le

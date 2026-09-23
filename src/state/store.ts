@@ -167,6 +167,11 @@ export interface EtatStoreJeu {
    * sauvegarde existe déjà, l'intro ne revient pas.
    */
   readonly partieNeuve: boolean
+  /**
+   * La dernière écriture de la sauvegarde principale a échoué (quota plein, stockage refusé) : la
+   * progression n'est plus sauvegardée. Repasse à `false` à la première écriture réussie.
+   */
+  readonly stockagePlein: boolean
   readonly actions: ActionsStoreJeu
 }
 
@@ -239,7 +244,7 @@ type Mode = 'confirmation' | 'actif' | 'illisible' | 'secondaire' | 'arrete'
 export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   const {
     horloge,
-    stockage,
+    stockage: stockageBrut,
     canal,
     matchMedia,
     idOnglet,
@@ -260,6 +265,40 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   // accumulateur, deux frames de 60 ms consécutives sans notification (aucune ne franchit 100 ms toute
   // seule) perdraient 60 ms à chaque fois au lieu de les cumuler jusqu'au tick suivant (EXG-2).
   let accumulNonTraiteMs = 0
+
+  /**
+   * Toute écriture passe par ici : une exception du port (quota dépassé, `QuotaExceededError`, stockage
+   * désactivé) ne fait jamais tomber la boucle, et l'issue d'une écriture de la sauvegarde **principale**
+   * pilote `stockagePlein`. Le verrou et les réglages n'y comptent pas : une petite écriture de verrou
+   * réussie ne dit rien de la place qu'il reste pour la partie. Le `setState` n'a lieu qu'au changement.
+   */
+  const stockage: Stockage = {
+    lire: (cle) => stockageBrut.lire(cle),
+    supprimer: (cle) => {
+      try {
+        stockageBrut.supprimer(cle)
+      } catch {
+        // Rien à signaler : une suppression ratée ne perd aucune progression.
+      }
+    },
+    ecrire: (cle, valeur) => {
+      // ADR-21 — une clé hors de l'espace `magic-battle:` est une faute de programmation : elle doit
+      // rester bruyante, pas être avalée comme un quota plein par le `catch` ci-dessous.
+      if (!cle.startsWith(PREFIXE_STOCKAGE)) {
+        throw new Error(`Clé de stockage hors de l'espace « ${PREFIXE_STOCKAGE} » : ${cle}`)
+      }
+      let reussie = true
+      try {
+        stockageBrut.ecrire(cle, valeur)
+      } catch {
+        reussie = false
+      }
+      if (cle !== CLE_PRINCIPALE) return
+      // Pendant la construction du store (`demarrer()` n'a encore rien écrit) `store` existe déjà :
+      // l'écriture principale n'a lieu qu'après la confirmation du verrou.
+      if (store.getState().stockagePlein === reussie) store.setState({ stockagePlein: !reussie })
+    },
+  }
 
   let reduitMouvement = false
   try {
@@ -284,6 +323,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       resumeHorsLigne: null,
       reduitMouvement,
       partieNeuve: false,
+      stockagePlein: false,
       actions: {
         clic: () => jouer((etat) => appliquerClic(etat, CONSTANTES)),
         lancerSort: (idSort) => jouer((etat) => lancerSort(etat, idSort, CONSTANTES).etat),
