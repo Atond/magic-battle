@@ -22,6 +22,7 @@ import { creerStoreJeu } from '../../src/state/store.ts'
 import type { StoreJeuApi } from '../../src/state/store.ts'
 import { useStoreJeu } from '../../src/state/hooks.ts'
 import {
+  confirmerDemarrage,
   creerCanalFactice,
   creerHorlogeFactice,
   creerMatchMediaFactice,
@@ -67,6 +68,7 @@ describe('sélecteurs Zustand fins — pas de re-render global au tick (spec T-1
       portPlanificateur,
       etatInitial: etatInitialProductif,
     })
+    confirmerDemarrage(portPlanificateur)
 
     let commitsOr = 0
     let commitsIndependant = 0

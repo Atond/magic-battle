@@ -1,18 +1,43 @@
-// Store pont React↔moteur (T-18, ADR-19). Zustand vanilla (`createStore`), tick hors React : le
-// `setState` n'est appelé que lorsqu'un delta de frame produit vraiment un tick, jamais à chaque frame.
+// Store pont React↔moteur (T-18, ADR-19) et persistance réelle (T-23a). Zustand vanilla (`createStore`),
+// tick hors React : le `setState` n'est appelé que lorsqu'un delta de frame produit vraiment un tick,
+// jamais à chaque frame.
 //
-// Règle tenue ici : aucune formule de jeu. Tout calcul passe par `src/domain/moteur.ts` — ce fichier ne
-// fait qu'orchestrer horloge, stockage, canal et planificateur autour de lui (EXG-1 à EXG-3, EXG-55).
+// Règle tenue ici : aucune formule de jeu, aucune règle de sauvegarde ou de verrou redéfinie. Tout
+// calcul passe par `src/domain/moteur.ts` ; l'import, la mise à l'abri et la restauration par
+// `src/domain/sauvegarde/index.ts` (plans exécutés **dans l'ordre du tableau**) ; qui a le droit d'écrire
+// par `src/domain/sauvegarde/verrou.ts`. Ce fichier ne fait qu'orchestrer horloge, stockage, canal,
+// page et planificateur autour d'eux.
+//
+// ── Cycle de vie d'un onglet (T-23a) ─────────────────────────────────────────────────────────────
+//   confirmation ─┬─► actif ◄──────────────┐        (propriétaire, boucle + auto-sauvegarde + battement)
+//                 ├─► illisible ──(action)─┘        (propriétaire, principal illisible : RIEN n'est écrit)
+//                 └─► secondaire ──(libération / expiration)──► confirmation   (lecture seule, figé)
+//   actif ──(perte du verrou détectée)──► secondaire   (gel immédiat, sans `calculHorsLigne`)
+//   * ──(pagehide)──► arrete ──(pageshow)──► confirmation
+// Toute entrée en `confirmation` est `demarrer()` : le démarrage complet, rejoué depuis le stockage —
+// jamais depuis l'état en mémoire (EXG-48, N3). Le 1er démarrage n'a aucun chemin particulier.
+//
+// ── Le canal n'est qu'un indice ──────────────────────────────────────────────────────────────────
+// Un message reçu ne décide jamais rien : il déclenche une **relecture du stockage**, et c'est le verrou
+// relu, passé à la politique du domaine, qui tranche. Un message forgé (même origine, autre dépôt) ne
+// peut donc ni donner ni retirer le droit d'écrire.
 
 import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
 
 import { PAS_TICK_MS, INTERVALLE_AUTOSAVE_MS } from '../domain/constantes-moteur.ts'
 import { appliquerClic, appliquerDelta, calculHorsLigne, lancerSort } from '../domain/moteur.ts'
-import { NOM_PRINCIPAL, exporterTexte, importerTexte, planifierImport } from '../domain/sauvegarde/index.ts'
-import { revendiquer, renouveler, liberer } from '../domain/sauvegarde/verrou.ts'
+import {
+  NOM_PRINCIPAL,
+  NOM_SECOURS,
+  exporterTexte,
+  importerTexte,
+  planifierImport,
+  restaurerSecours,
+} from '../domain/sauvegarde/index.ts'
+import type { ErreurImport, MotifRefusImport, PlanEcrasement } from '../domain/sauvegarde/index.ts'
+import { evaluerDroitEcriture, liberer, renouveler, revendiquer } from '../domain/sauvegarde/verrou.ts'
 import type { EtatVerrou } from '../domain/sauvegarde/verrou.ts'
-import type { PlanEcrasement } from '../domain/sauvegarde/index.ts'
 import { acheterNiveaux } from '../domain/ecoles/index.ts'
 import { acheterAmelioration } from '../domain/ameliorations/index.ts'
 import { acheterEquipement } from '../domain/equipement/index.ts'
@@ -20,8 +45,10 @@ import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
 import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
 import {
+  DELAI_CONFIRMATION_VERROU_MS,
   DELAI_EXPIRATION_VERROU_MS,
   INTERVALLE_BATTEMENT_VERROU_MS,
+  NOM_VERROU,
   PREFIXE_STOCKAGE,
 } from './constantes.ts'
 import { ETAPES_DEMARRAGE } from './demarrage.ts'
@@ -45,28 +72,72 @@ export interface OptionsStoreJeu {
   readonly onEtapeDemarrage?: (etape: EtapeDemarrage) => void
 }
 
+/**
+ * Issue d'une action de sauvegarde (`importer`, `restaurerSecours`, `nouvellePartie`). `sansDroit` :
+ * l'onglet n'est pas propriétaire du verrou (ou vient de le perdre) — rien n'a été écrit. `refuse` : le
+ * domaine a rejeté la charge — rien n'a été écrit non plus, l'état courant est intact.
+ */
+export type ResultatActionSauvegarde =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly motif: 'sansDroit' }
+  | { readonly ok: false; readonly motif: 'refuse'; readonly erreur: ErreurImport }
+
 export interface ActionsStoreJeu {
-  /** EXG-11 — clic du sort de clic. Sans effet si l'onglet n'a pas le droit d'écriture (EXG-48). */
+  /** EXG-11 — clic du sort de clic. Sans effet si l'onglet ne joue pas (secondaire, illisible, EXG-48). */
   readonly clic: () => void
   /** EXG-12 — déclenche un sort actif par identifiant. Même garde que `clic`. */
   readonly lancerSort: (idSort: string) => void
   /** EXG-8 / EXG-9 — achète un niveau d'école (T-19). Refus silencieux : aucune formule ici, tout passe
    *  par `acheterNiveaux` (`src/domain/ecoles/index.ts`), l'UI n'affiche que le résultat. */
   readonly acheterEcole: (id: IdEcole) => void
-  /** EXG-42 — achète un palier d'amélioration (or), même garde `droitEcriture`. */
+  /** EXG-42 — achète un palier d'amélioration (or), même garde. */
   readonly acheterAmelioration: (id: string) => void
-  /** EXG-43 — achète un palier d'équipement (Renommée), même garde `droitEcriture`. */
+  /** EXG-43 — achète un palier d'équipement (Renommée), même garde. */
   readonly acheterEquipement: (id: string) => void
-  /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde `droitEcriture`. */
+  /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde. */
   readonly acheterNoeudEclats: (id: string) => void
+  /**
+   * EXG-24 / EXG-46 — importe un texte d'export (sans UI : T-28 branchera le champ). Import confirmé ⇒
+   * l'état courant part dans `.bak` (sauf principal illisible : aucune copie, EXG-46), puis le principal
+   * est remplacé. `derniereSauvegardeMs = maintenant` : un import ne crédite **aucun** hors-ligne (N10).
+   */
+  readonly importer: (texte: string) => ResultatActionSauvegarde
+  /** EXG-46 — la copie de secours redevient la partie active. Aucun crédit hors-ligne. */
+  readonly restaurerSecours: () => ResultatActionSauvegarde
+  /**
+   * EXG-27 / EXG-46 — nouvelle partie confirmée. Principal lisible ⇒ mis à l'abri dans `.bak` ; principal
+   * illisible ⇒ `contenuCourant: null`, aucune copie : un `.bak` valide n'est jamais écrasé.
+   */
+  readonly nouvellePartie: () => ResultatActionSauvegarde
+}
+
+/** EXG-48 — pourquoi l'onglet est en lecture seule (bandeau de T-23b). */
+export type MotifLectureSeule =
+  /** Un autre onglet détient le verrou et bat encore. */
+  | 'ongletSecondaire'
+  /** Cet onglet écrivait, et a constaté qu'un autre a pris la main (veille, onglet gelé…). */
+  | 'verrouPerdu'
+
+/** EXG-27 — le principal n'a pas pu être relu : écran d'erreur de T-23b, rien n'est écrit en attendant. */
+export interface SauvegardeIllisible {
+  readonly motif: MotifRefusImport
+  /** Message du domaine, en français, sans la valeur brute (`ErreurImport.message`). Texte, jamais HTML. */
+  readonly message: string
+  /** EXG-46 — « restaurer » n'est proposé que si `restaurerSecours` réussit sur le `.bak` actuel. */
+  readonly secoursRestaurable: boolean
 }
 
 export interface EtatStoreJeu {
   readonly etat: EtatJeu
-  /** Vrai une fois la séquence de démarrage terminée (boucle et minuteries armées). */
+  /** Vrai une fois un premier démarrage résolu (propriétaire, secondaire ou illisible). */
   readonly pret: boolean
-  /** EXG-48 — droit d'écriture de cet onglet, tel qu'établi par la dernière évaluation du verrou. */
+  /** EXG-48 — cet onglet détient le verrou (actif ou illisible). */
   readonly droitEcriture: boolean
+  /** EXG-48 — onglet figé : pas de tick, pas de canvas, actions sans effet. */
+  readonly lectureSeule: boolean
+  readonly motifLectureSeule: MotifLectureSeule | null
+  /** EXG-27 — non nul tant que le joueur n'a pas choisi (nouvelle partie, restaurer, importer). */
+  readonly sauvegardeIllisible: SauvegardeIllisible | null
   /** Dernier résumé hors-ligne connu (démarrage ou rattrapage de frame géant), pour l'encart EXG-53. */
   readonly resumeHorsLigne: ResumeHorsLigne | null
   /** EXG-29/EXG-50 — dernière lecture de `prefers-reduced-motion` via le port `matchMedia`. */
@@ -75,7 +146,7 @@ export interface EtatStoreJeu {
 }
 
 export type StoreJeuApi = StoreApi<EtatStoreJeu> & {
-  /** Arrête boucle, auto-sauvegarde et battement, et relâche le verrou si cet onglet le détenait. */
+  /** Arrête tout (boucle, minuteries, écouteurs, canal) et relâche le verrou si cet onglet le détenait. */
   readonly arreter: () => void
   /**
    * Ports bruts, exposés pour un usage strictement hors moteur (T-21, `src/canvas/reglages.ts` :
@@ -88,33 +159,47 @@ export type StoreJeuApi = StoreApi<EtatStoreJeu> & {
   readonly matchMedia: PortMatchMedia
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ clés de stockage */
+/* ═══════════════════════════════════════════════════════════════════════════ clés et messages */
 
 function cleStockage(nomLogique: string): string {
   return `${PREFIXE_STOCKAGE}${nomLogique}`
 }
 
-const CLE_VERROU = cleStockage('verrou')
+const CLE_VERROU = cleStockage(NOM_VERROU)
 const CLE_PRINCIPALE = cleStockage(NOM_PRINCIPAL)
+const CLE_SECOURS = cleStockage(NOM_SECOURS)
 
 /** Relit un verrou persisté : une valeur illisible ou incomplète vaut « absent », jamais une exception. */
 function lireVerrou(brut: string | null): EtatVerrou | null {
   if (brut === null) return null
   try {
     const valeur: unknown = JSON.parse(brut)
-    if (
-      valeur !== null &&
-      typeof valeur === 'object' &&
-      typeof (valeur as { idProprietaire?: unknown }).idProprietaire === 'string' &&
-      Number.isFinite((valeur as { dernierHeartbeatMs?: unknown }).dernierHeartbeatMs)
-    ) {
-      return valeur as EtatVerrou
-    }
+    if (valeur === null || typeof valeur !== 'object') return null
+    const idProprietaire = (valeur as { idProprietaire?: unknown }).idProprietaire
+    const dernierHeartbeatMs = (valeur as { dernierHeartbeatMs?: unknown }).dernierHeartbeatMs
+    if (typeof idProprietaire !== 'string' || typeof dernierHeartbeatMs !== 'number') return null
+    // Reconstruit champ par champ : rien de l'objet lu n'est étalé ni conservé par référence.
+    return { idProprietaire, dernierHeartbeatMs }
   } catch {
-    // JSON invalide : verrou considéré absent, comme un stockage jamais écrit.
+    return null
   }
+}
+
+/** Messages du canal : de simples indices (voir l'en-tête), jamais une décision. */
+type MessageVerrou =
+  | { readonly type: 'revendication'; readonly idOnglet: string }
+  | { readonly type: 'liberation'; readonly idOnglet: string }
+
+function lireMessage(message: unknown): MessageVerrou | null {
+  if (message === null || typeof message !== 'object') return null
+  const type = (message as { type?: unknown }).type
+  const idOnglet = (message as { idOnglet?: unknown }).idOnglet
+  if (typeof idOnglet !== 'string') return null
+  if (type === 'revendication' || type === 'liberation') return { type, idOnglet }
   return null
 }
+
+type Mode = 'confirmation' | 'actif' | 'illisible' | 'secondaire' | 'arrete'
 
 /* ══════════════════════════════════════════════════════════════════════════════ fabrique */
 
@@ -122,6 +207,9 @@ function lireVerrou(brut: string | null): EtatVerrou | null {
  * Fabrique injectable du store pont (spec T-18). Deux ports dédiés (`portPage`, `portPlanificateur`)
  * plutôt qu'un branchement global sur `window` : deux appels à `creerStoreJeu` avec des doubles distincts
  * ne partagent aucun minuteur ni aucun écouteur, exactement ce qu'exige l'isolation multi-onglet.
+ *
+ * Le démarrage n'est **pas** synchrone : le verrou n'est tenu pour acquis qu'après la relecture de
+ * `DELAI_CONFIRMATION_VERROU_MS` (écrire-puis-relire). `pret` reste faux jusque-là.
  */
 export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   const {
@@ -136,10 +224,158 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     onEtapeDemarrage,
   } = options
 
+  let mode: Mode = 'confirmation'
+  let idFrame: number | null = null
+  let idAutoSauvegarde: number | null = null
+  let idBattement: number | null = null
+  let idConfirmation: number | null = null
+  let dernierHorodatageMs = horloge.maintenantMs()
+  // Temps réel écoulé et pas encore soumis à `appliquerDelta` : distinct d'`etat.resteDeltaMs`, qui ne
+  // se met à jour que dans l'état **persisté** (donc seulement quand `setState` a lieu). Sans cet
+  // accumulateur, deux frames de 60 ms consécutives sans notification (aucune ne franchit 100 ms toute
+  // seule) perdraient 60 ms à chaque fois au lieu de les cumuler jusqu'au tick suivant (EXG-2).
+  let accumulNonTraiteMs = 0
+
+  let reduitMouvement = false
+  try {
+    reduitMouvement = matchMedia.correspond('(prefers-reduced-motion: reduce)')
+  } catch {
+    // ADR-21 — un port `matchMedia` défaillant ne doit jamais empêcher le démarrage.
+  }
+
+  const store: StoreApi<EtatStoreJeu> = createStore<EtatStoreJeu>((set, get) => {
+    /** Applique une transition de jeu seulement si cet onglet joue (EXG-48 : actions sans effet sinon). */
+    function jouer(transition: (etat: EtatJeu) => EtatJeu): void {
+      if (mode !== 'actif') return
+      set({ etat: transition(get().etat) })
+    }
+    return {
+      etat: etatInitialFn(horloge.maintenantMs()),
+      pret: false,
+      droitEcriture: false,
+      lectureSeule: false,
+      motifLectureSeule: null,
+      sauvegardeIllisible: null,
+      resumeHorsLigne: null,
+      reduitMouvement,
+      actions: {
+        clic: () => jouer((etat) => appliquerClic(etat, CONSTANTES)),
+        lancerSort: (idSort) => jouer((etat) => lancerSort(etat, idSort, CONSTANTES).etat),
+        acheterEcole: (id) => jouer((etat) => acheterNiveaux(etat, id, 1, CONSTANTES).etat),
+        acheterAmelioration: (id) => jouer((etat) => acheterAmelioration(etat, id, CONSTANTES).etat),
+        acheterEquipement: (id) => jouer((etat) => acheterEquipement(etat, id, CONSTANTES).etat),
+        acheterNoeudEclats: (id) => jouer((etat) => acheterNoeudArbre(etat, id, 1, 'eclats', CONSTANTES).etat),
+        importer: (texte) => importer(texte),
+        restaurerSecours: () => restaurer(),
+        nouvellePartie: () => nouvellePartie(),
+      },
+    }
+  })
+
   function emettreEtape(etape: EtapeDemarrage): void {
     onEtapeDemarrage?.(etape)
   }
 
+  /* ─────────────────────────────────────────────────────────────────────────── verrou (EXG-48) */
+
+  function lireVerrouStocke(): EtatVerrou | null {
+    return lireVerrou(stockage.lire(CLE_VERROU))
+  }
+
+  function ecrireVerrou(verrou: EtatVerrou | null): void {
+    if (verrou === null) stockage.supprimer(CLE_VERROU)
+    else stockage.ecrire(CLE_VERROU, JSON.stringify(verrou))
+  }
+
+  function publier(message: MessageVerrou): void {
+    try {
+      canal.publier(message)
+    } catch {
+      // Canal fermé ou indisponible : le verrou vit dans le stockage, le canal n'est qu'un accélérateur.
+    }
+  }
+
+  /**
+   * « Verrou relu avant chaque écriture » : cet onglet est-il, **d'après le stockage**, propriétaire ?
+   * Un verrou absent ou illisible alors qu'on se croyait propriétaire est une perte, pas une invitation à
+   * le reprendre en silence : un autre onglet a pu le prendre (expiration), écrire, puis le libérer.
+   */
+  function detientVerrou(maintenantMs: number): boolean {
+    return evaluerDroitEcriture(lireVerrouStocke(), idOnglet, maintenantMs, DELAI_EXPIRATION_VERROU_MS).droitEcriture
+  }
+
+  /** Toute perte détectée fige l'onglet, **sans** `calculHorsLigne` et sans rien écrire (N3). */
+  function perdreVerrou(): void {
+    devenirSecondaire('verrouPerdu')
+  }
+
+  function battre(): void {
+    const maintenant = horloge.maintenantMs()
+    if (mode === 'secondaire') {
+      tenterRelais(maintenant)
+      return
+    }
+    if (mode !== 'actif' && mode !== 'illisible') return
+    const lu = lireVerrouStocke()
+    if (lu === null || lu.idProprietaire !== idOnglet) {
+      perdreVerrou()
+      return
+    }
+    const verdict = renouveler(lu, idOnglet, maintenant, DELAI_EXPIRATION_VERROU_MS)
+    if (!verdict.droitEcriture) {
+      perdreVerrou()
+      return
+    }
+    // Référence inchangée ⇒ rien à propager (aucune écriture inutile, `renouveler`).
+    if (verdict.verrou !== lu) ecrireVerrou(verdict.verrou)
+  }
+
+  /** Onglet secondaire : relaie dès que le verrou est libre (libéré, illisible) ou expiré. */
+  function tenterRelais(maintenantMs: number): void {
+    const verdict = evaluerDroitEcriture(lireVerrouStocke(), idOnglet, maintenantMs, DELAI_EXPIRATION_VERROU_MS)
+    if (verdict.motif === 'libre') demarrer()
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────── minuteries */
+
+  function arreterBoucle(): void {
+    if (idFrame !== null) portPlanificateur.annulerFrame(idFrame)
+    idFrame = null
+  }
+
+  function lancerBoucle(): void {
+    if (idFrame !== null || mode !== 'actif' || !portPage.estVisible()) return
+    idFrame = portPlanificateur.planifierFrame(boucle)
+  }
+
+  function armerAutoSauvegarde(): void {
+    if (idAutoSauvegarde !== null || mode !== 'actif' || !portPage.estVisible()) return
+    idAutoSauvegarde = portPlanificateur.planifierIntervalle(sauvegarderRoutine, INTERVALLE_AUTOSAVE_MS)
+  }
+
+  function desarmerAutoSauvegarde(): void {
+    if (idAutoSauvegarde !== null) portPlanificateur.annulerIntervalle(idAutoSauvegarde)
+    idAutoSauvegarde = null
+  }
+
+  function armerBattement(): void {
+    if (idBattement !== null) return
+    idBattement = portPlanificateur.planifierIntervalle(battre, INTERVALLE_BATTEMENT_VERROU_MS)
+  }
+
+  function desarmerBattement(): void {
+    if (idBattement !== null) portPlanificateur.annulerIntervalle(idBattement)
+    idBattement = null
+  }
+
+  function annulerConfirmation(): void {
+    if (idConfirmation !== null) portPlanificateur.annulerIntervalle(idConfirmation)
+    idConfirmation = null
+  }
+
+  /* ────────────────────────────────────────────────────────────────── écritures de sauvegarde */
+
+  /** Exécute un plan du domaine **dans l'ordre du tableau** (EXG-46 : la mise à l'abri d'abord). */
   function executerPlan(plan: PlanEcrasement): void {
     for (const ecriture of plan.ecritures) {
       if (ecriture.contenu === null) stockage.supprimer(cleStockage(ecriture.nom))
@@ -147,58 +383,22 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     }
   }
 
-  function sauvegarder(etat: EtatJeu, maintenantMs: number): void {
-    const contenuCourant = stockage.lire(CLE_PRINCIPALE)
-    const nouveauTexte = exporterTexte(etat, maintenantMs)
-    executerPlan(planifierImport(contenuCourant, nouveauTexte, 'nouvellePartie'))
+  /**
+   * Sauvegarde courante (auto-sauvegarde EXG-22, `hidden`/`pagehide`/`beforeunload` EXG-23) : principal
+   * seul, jamais `.bak` (EXG-46 ne met à l'abri qu'avant un import ou une nouvelle partie — copier à
+   * chaque sauvegarde remplacerait l'état d'avant import par l'import lui-même au bout de 30 s).
+   */
+  function sauvegarderRoutine(): void {
+    if (mode !== 'actif') return
+    const maintenant = horloge.maintenantMs()
+    if (!detientVerrou(maintenant)) {
+      perdreVerrou()
+      return
+    }
+    stockage.ecrire(CLE_PRINCIPALE, exporterTexte(store.getState().etat, maintenant))
   }
 
-  const store: StoreApi<EtatStoreJeu> = createStore<EtatStoreJeu>((set, get) => ({
-    etat: etatInitialFn(horloge.maintenantMs()),
-    pret: false,
-    droitEcriture: false,
-    resumeHorsLigne: null,
-    reduitMouvement: false,
-    actions: {
-      clic: () => {
-        if (!get().droitEcriture) return
-        set({ etat: appliquerClic(get().etat, CONSTANTES) })
-      },
-      lancerSort: (idSort: string) => {
-        if (!get().droitEcriture) return
-        const resultat = lancerSort(get().etat, idSort, CONSTANTES)
-        set({ etat: resultat.etat })
-      },
-      acheterEcole: (id: IdEcole) => {
-        if (!get().droitEcriture) return
-        set({ etat: acheterNiveaux(get().etat, id, 1, CONSTANTES).etat })
-      },
-      acheterAmelioration: (id: string) => {
-        if (!get().droitEcriture) return
-        set({ etat: acheterAmelioration(get().etat, id, CONSTANTES).etat })
-      },
-      acheterEquipement: (id: string) => {
-        if (!get().droitEcriture) return
-        set({ etat: acheterEquipement(get().etat, id, CONSTANTES).etat })
-      },
-      acheterNoeudEclats: (id: string) => {
-        if (!get().droitEcriture) return
-        set({ etat: acheterNoeudArbre(get().etat, id, 1, 'eclats', CONSTANTES).etat })
-      },
-    },
-  }))
-
-  /* ─────────────────────────────────────────────────────────── boucle (hors React, EXG-1 à EXG-3) */
-
-  let idFrame: number | null = null
-  let idAutoSauvegarde: number | null = null
-  let idBattement: number | null = null
-  let dernierHorodatageMs = horloge.maintenantMs()
-  // Temps réel écoulé et pas encore soumis à `appliquerDelta` : distinct d'`etat.resteDeltaMs`, qui ne
-  // se met à jour que dans l'état **persisté** (donc seulement quand `setState` a lieu). Sans cet
-  // accumulateur, deux frames de 60 ms consécutives sans notification (aucune ne franchit 100 ms toute
-  // seule) perdraient 60 ms à chaque fois au lieu de les cumuler jusqu'au tick suivant (EXG-2).
-  let accumulNonTraiteMs = 0
+  /* ────────────────────────────────────────────────────────── boucle (hors React, EXG-1 à EXG-3) */
 
   const seuilRattrapageMs = (): number => {
     const seuil = CONSTANTES.tick.nTicksMax
@@ -209,14 +409,28 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     accumulNonTraiteMs += deltaMs
     const etatCourant = store.getState().etat
 
-    // EXG-55 — au-delà du seuil `nTicksMax × PAS_TICK_MS` de temps non traité, le rattrapage passe par
-    // `calculHorsLigne` (onglet resté caché, veille système…), jamais par la forme fermée interne
-    // d'`appliquerDelta`.
+    // EXG-55 — au-delà du seuil `nTicksMax × PAS_TICK_MS` de temps non traité (onglet revenu de `hidden`,
+    // veille système sans `visibilitychange`…), le rattrapage passe par `calculHorsLigne`, jamais par la
+    // forme fermée d'`appliquerDelta`.
     if (accumulNonTraiteMs > seuilRattrapageMs()) {
-      const { etat, resume } = calculHorsLigne(etatCourant, maintenantMs, CONSTANTES)
-      // « la référence de frame est remise à zéro » : le temps non traité n'a plus de sens après un saut
-      // hors-ligne, il repart de zéro pour la frame suivante — de même pour `etat.resteDeltaMs`.
+      // Comparaison d'horloge dédiée (EXG-55) : l'absence commence au dernier instant traité par la
+      // boucle, pas à la dernière écriture. `etat.derniereSauvegardeMs` en mémoire date du démarrage
+      // (les sauvegardes n'y touchent pas) : s'y fier créditerait toute la session de jeu au premier
+      // sommeil de 61 s. Le moteur calcule Δt = maintenant − derniereSauvegardeMs ; on lui dit donc où
+      // l'absence commence, sans toucher à sa formule.
+      const debutAbsenceMs = maintenantMs - accumulNonTraiteMs
       accumulNonTraiteMs = 0
+      // N3 — un onglet qui a perdu la main pendant l'absence fige, il ne crédite rien.
+      if (!detientVerrou(maintenantMs)) {
+        perdreVerrou()
+        return
+      }
+      const { etat, resume } = calculHorsLigne(
+        { ...etatCourant, derniereSauvegardeMs: debutAbsenceMs },
+        maintenantMs,
+        CONSTANTES,
+      )
+      // « la référence de frame est remise à zéro » : de même pour `etat.resteDeltaMs`.
       store.setState({ etat: { ...etat, resteDeltaMs: 0 }, resumeHorsLigne: resume })
       return
     }
@@ -230,110 +444,294 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   }
 
   function boucle(): void {
+    idFrame = null
+    if (mode !== 'actif' || !portPage.estVisible()) return
     const maintenant = horloge.maintenantMs()
     const deltaMs = maintenant - dernierHorodatageMs
     dernierHorodatageMs = maintenant
     if (deltaMs > 0) traiterDelta(deltaMs, maintenant)
-    idFrame = portPlanificateur.planifierFrame(boucle)
+    lancerBoucle()
   }
 
-  /* ────────────────────────────────────────────────────────────────────── verrou (EXG-48, minimal) */
+  /* ──────────────────────────────────────────────────────────────── transitions de cycle de vie */
 
-  function publierVerrou(verrou: EtatVerrou | null): void {
-    if (verrou === null) {
-      stockage.supprimer(CLE_VERROU)
-    } else {
-      stockage.ecrire(CLE_VERROU, JSON.stringify(verrou))
+  function devenirSecondaire(motif: MotifLectureSeule): void {
+    arreterBoucle()
+    desarmerAutoSauvegarde()
+    annulerConfirmation()
+    mode = 'secondaire'
+    let etat = store.getState().etat
+    if (motif === 'ongletSecondaire') {
+      // Vue figée de la partie du propriétaire : relue du stockage, **sans** plan ni `calculHorsLigne`.
+      // Un principal illisible n'a rien à montrer ici : l'écran EXG-27 appartient au propriétaire.
+      const texte = stockage.lire(CLE_PRINCIPALE)
+      const base = etatInitialFn(horloge.maintenantMs())
+      etat = texte === null ? base : importerTexte(texte, base, CONSTANTES).etat
     }
-    canal.publier({ type: 'verrou', idOnglet, verrou })
+    // En cas de perte, l'état en mémoire reste affiché tel quel, figé : il ne sera plus jamais écrit.
+    store.setState({
+      etat,
+      pret: true,
+      droitEcriture: false,
+      lectureSeule: true,
+      motifLectureSeule: motif,
+      sauvegardeIllisible: null,
+      resumeHorsLigne: null,
+    })
+    armerBattement()
   }
 
-  function battreVerrou(): void {
-    const maintenant = horloge.maintenantMs()
-    const verrouLu = lireVerrou(stockage.lire(CLE_VERROU))
-    const verdict = renouveler(verrouLu, idOnglet, maintenant, DELAI_EXPIRATION_VERROU_MS)
-    if (verdict.droitEcriture !== store.getState().droitEcriture) {
-      store.setState({ droitEcriture: verdict.droitEcriture })
-    }
-    // Référence inchangée ⇒ `renouveler` n'a rien à propager (EXG-48, aucune écriture inutile).
-    if (verdict.verrou !== verrouLu) publierVerrou(verdict.verrou)
-  }
-
-  /* ────────────────────────────────────────────────────────────────────────── séquence de démarrage */
-
+  /**
+   * Démarrage complet (contrat `SequenceDemarrage`, `demarrage.ts`). Rejoué à l'identique pour toute
+   * acquisition : 1er démarrage, relais d'un secondaire, `pageshow`. Première moitié : le verrou.
+   */
   function demarrer(): void {
+    arreterBoucle()
+    desarmerAutoSauvegarde()
+    annulerConfirmation()
     const maintenant = horloge.maintenantMs()
+    const lu = lireVerrouStocke()
+    const verdict = revendiquer(lu, idOnglet, maintenant, DELAI_EXPIRATION_VERROU_MS)
+    if (!verdict.droitEcriture) {
+      emettreEtape('verrou')
+      devenirSecondaire('ongletSecondaire')
+      return
+    }
+    if (verdict.verrou !== lu) ecrireVerrou(verdict.verrou)
+    mode = 'confirmation'
+    publier({ type: 'revendication', idOnglet })
+    idConfirmation = portPlanificateur.planifierIntervalle(confirmer, DELAI_CONFIRMATION_VERROU_MS)
+  }
 
-    // 1. verrou — revendication (ou confirmation) du droit d'écriture de cet onglet.
-    const verdictVerrou = revendiquer(lireVerrou(stockage.lire(CLE_VERROU)), idOnglet, maintenant, DELAI_EXPIRATION_VERROU_MS)
-    if (verdictVerrou.verrou !== null) publierVerrou(verdictVerrou.verrou)
-    const proprietaire = verdictVerrou.droitEcriture
+  /** Écrire-puis-relire : après le délai, seul le stockage relu dit qui a gagné. */
+  function confirmer(): void {
+    annulerConfirmation()
+    if (mode !== 'confirmation') return
+    const maintenant = horloge.maintenantMs()
     emettreEtape('verrou')
+    if (!detientVerrou(maintenant)) {
+      devenirSecondaire('ongletSecondaire')
+      return
+    }
+    chargerDepuisStockage(maintenant)
+  }
 
-    // 2. `importerTexte(principal)` — relecture seule, **sans** exécuter son plan (rien n'est écrit ici).
-    let etat = etatInitialFn(maintenant)
-    const texteBrut = stockage.lire(CLE_PRINCIPALE)
-    if (texteBrut !== null) {
-      const resultat = importerTexte(texteBrut, etat, CONSTANTES)
-      if (resultat.ok) etat = resultat.etat
-      // Un refus laisse `etat` à la valeur de nouvelle partie posée ci-dessus : l'écran d'erreur EXG-27
-      // et la restauration `.bak` appartiennent à T-23a (persistance réelle).
+  /** Seconde moitié du démarrage, propriétaire confirmé : import → hors-ligne → sauvegarde → boucle. */
+  function chargerDepuisStockage(maintenantMs: number): void {
+    // 2. `importerTexte(principal)` — relecture du texte d'`exporterTexte`, **sans** exécuter son plan.
+    const base = etatInitialFn(maintenantMs)
+    const texte = stockage.lire(CLE_PRINCIPALE)
+    let etat = base
+    if (texte !== null) {
+      const resultat = importerTexte(texte, base, CONSTANTES)
+      if (!resultat.ok) {
+        emettreEtape('importerSauvegarde')
+        entrerIllisible(resultat.erreur, base)
+        return
+      }
+      etat = resultat.etat
     }
     emettreEtape('importerSauvegarde')
 
-    // 3. `calculHorsLigne` — propriétaire du verrou seulement (EXG-4/EXG-5).
-    let resumeHorsLigne: ResumeHorsLigne | null = null
-    if (proprietaire) {
-      const resultat = calculHorsLigne(etat, maintenant, CONSTANTES)
-      etat = resultat.etat
-      resumeHorsLigne = resultat.resume
-    }
+    // 3. `calculHorsLigne` — propriétaire seulement (EXG-4/EXG-5).
+    const credite = calculHorsLigne(etat, maintenantMs, CONSTANTES)
     emettreEtape('calculHorsLigne')
 
-    // 4. sauvegarde immédiate — seul le propriétaire écrit (EXG-46 : passe par la mise à l'abri).
-    if (proprietaire) sauvegarder(etat, maintenant)
+    // 4. sauvegarde immédiate — verrou relu juste avant, comme toute écriture.
+    if (!detientVerrou(maintenantMs)) {
+      perdreVerrou()
+      return
+    }
+    stockage.ecrire(CLE_PRINCIPALE, exporterTexte(credite.etat, maintenantMs))
     emettreEtape('sauvegardeImmediate')
 
-    let reduitMouvement = false
-    try {
-      reduitMouvement = matchMedia.correspond('(prefers-reduced-motion: reduce)')
-    } catch {
-      // ADR-21 — un port `matchMedia` défaillant ne doit jamais empêcher le démarrage.
-    }
-
-    store.setState({ etat, pret: true, droitEcriture: proprietaire, resumeHorsLigne, reduitMouvement })
+    mode = 'actif'
+    accumulNonTraiteMs = 0
+    store.setState({
+      etat: credite.etat,
+      pret: true,
+      droitEcriture: true,
+      lectureSeule: false,
+      motifLectureSeule: null,
+      sauvegardeIllisible: null,
+      resumeHorsLigne: credite.resume,
+    })
 
     // 5. boucle — pilotée par `portPlanificateur`, jamais par un minuteur global.
     dernierHorodatageMs = horloge.maintenantMs()
-    idFrame = portPlanificateur.planifierFrame(boucle)
+    lancerBoucle()
     emettreEtape('boucle')
 
     // 6. auto-sauvegarde (EXG-22) + battement du verrou (EXG-48).
-    idAutoSauvegarde = portPlanificateur.planifierIntervalle(() => {
-      sauvegarder(store.getState().etat, horloge.maintenantMs())
-    }, INTERVALLE_AUTOSAVE_MS)
-    idBattement = portPlanificateur.planifierIntervalle(battreVerrou, INTERVALLE_BATTEMENT_VERROU_MS)
+    armerAutoSauvegarde()
+    armerBattement()
     emettreEtape('autoSauvegardeEtBattement')
   }
 
-  function arreter(): void {
-    if (idFrame !== null) portPlanificateur.annulerFrame(idFrame)
-    if (idAutoSauvegarde !== null) portPlanificateur.annulerIntervalle(idAutoSauvegarde)
-    if (idBattement !== null) portPlanificateur.annulerIntervalle(idBattement)
-    idFrame = null
-    idAutoSauvegarde = null
-    idBattement = null
-    if (store.getState().droitEcriture) {
-      const restant = liberer(lireVerrou(stockage.lire(CLE_VERROU)), idOnglet)
-      publierVerrou(restant)
-    }
-    canal.fermer()
+  /** EXG-27 — principal illisible : propriétaire, mais rien ne tourne et rien n'est écrit. */
+  function entrerIllisible(erreur: ErreurImport, base: EtatJeu): void {
+    const secoursRestaurable = restaurerSecours(stockage.lire(CLE_SECOURS), base, CONSTANTES).ok
+    mode = 'illisible'
+    store.setState({
+      etat: base,
+      pret: true,
+      droitEcriture: true,
+      lectureSeule: false,
+      motifLectureSeule: null,
+      sauvegardeIllisible: { motif: erreur.motif, message: erreur.message, secoursRestaurable },
+      resumeHorsLigne: null,
+    })
+    armerBattement()
   }
 
-  // `portPage` : sur fermeture propre, on relâche immédiatement plutôt que d'attendre l'expiration
-  // (EXG-23/EXG-48). La suspension du tick sur `hidden` (EXG-55) et le rejeu complet au retour
-  // (`pageshow`) sont la persistance réelle de T-23a — non exercés par la persistance factice de T-18.
-  portPage.surPageHide(() => arreter())
+  /**
+   * Après un import, une restauration ou une nouvelle partie confirmés : la partie reprend **maintenant**.
+   * `derniereSauvegardeMs = maintenant` en mémoire comme dans le principal réécrit : aucun crédit
+   * hors-ligne, ni tout de suite ni au prochain démarrage (N10).
+   */
+  function reprendreSur(etat: EtatJeu, maintenantMs: number): void {
+    const repris: EtatJeu = { ...etat, derniereSauvegardeMs: maintenantMs }
+    stockage.ecrire(CLE_PRINCIPALE, exporterTexte(repris, maintenantMs))
+    mode = 'actif'
+    accumulNonTraiteMs = 0
+    dernierHorodatageMs = maintenantMs
+    store.setState({
+      etat: repris,
+      pret: true,
+      droitEcriture: true,
+      lectureSeule: false,
+      motifLectureSeule: null,
+      sauvegardeIllisible: null,
+      resumeHorsLigne: null,
+    })
+    lancerBoucle()
+    armerAutoSauvegarde()
+    armerBattement()
+  }
+
+  /** Garde commune des actions de sauvegarde : propriétaire (actif ou illisible), verrou relu. */
+  function peutEcrireSauvegarde(maintenantMs: number): boolean {
+    if (mode !== 'actif' && mode !== 'illisible') return false
+    if (!detientVerrou(maintenantMs)) {
+      perdreVerrou()
+      return false
+    }
+    return true
+  }
+
+  /**
+   * Ce que l'écrasement va détruire (`OptionsImport.contenuCourant`) : la partie **en cours**, telle
+   * qu'une sauvegarde l'écrirait maintenant — pas le principal d'il y a jusqu'à 30 s. Principal illisible
+   * ⇒ `null` : rien à mettre à l'abri, et surtout pas une donnée corrompue par-dessus un `.bak` valide.
+   */
+  function contenuCourant(maintenantMs: number): string | null {
+    if (mode === 'illisible') return null
+    return exporterTexte(store.getState().etat, maintenantMs)
+  }
+
+  function importer(texte: string): ResultatActionSauvegarde {
+    const maintenant = horloge.maintenantMs()
+    if (!peutEcrireSauvegarde(maintenant)) return { ok: false, motif: 'sansDroit' }
+    const resultat = importerTexte(texte, store.getState().etat, CONSTANTES, {
+      contenuCourant: contenuCourant(maintenant),
+    })
+    if (!resultat.ok) return { ok: false, motif: 'refuse', erreur: resultat.erreur }
+    executerPlan(resultat.plan)
+    reprendreSur(resultat.etat, maintenant)
+    return { ok: true }
+  }
+
+  function restaurer(): ResultatActionSauvegarde {
+    const maintenant = horloge.maintenantMs()
+    if (!peutEcrireSauvegarde(maintenant)) return { ok: false, motif: 'sansDroit' }
+    const resultat = restaurerSecours(stockage.lire(CLE_SECOURS), store.getState().etat, CONSTANTES)
+    if (!resultat.ok) return { ok: false, motif: 'refuse', erreur: resultat.erreur }
+    executerPlan(resultat.plan)
+    reprendreSur(resultat.etat, maintenant)
+    return { ok: true }
+  }
+
+  function nouvellePartie(): ResultatActionSauvegarde {
+    const maintenant = horloge.maintenantMs()
+    if (!peutEcrireSauvegarde(maintenant)) return { ok: false, motif: 'sansDroit' }
+    const neuf = etatInitialFn(maintenant)
+    executerPlan(planifierImport(contenuCourant(maintenant), exporterTexte(neuf, maintenant), 'nouvellePartie'))
+    reprendreSur(neuf, maintenant)
+    return { ok: true }
+  }
+
+  /* ─────────────────────────────────────────────────────────────── cycle de vie de la page */
+
+  /** Rend le verrou s'il est à nous (EXG-48 : relais immédiat du secondaire, sans attendre l'expiration). */
+  function relacherVerrou(): void {
+    const lu = lireVerrouStocke()
+    const restant = liberer(lu, idOnglet)
+    if (restant === lu) return
+    ecrireVerrou(restant)
+    publier({ type: 'liberation', idOnglet })
+  }
+
+  function suspendre(): void {
+    if (mode === 'arrete') return
+    // EXG-23 — sauvegarde immédiate à la fermeture (verrou relu : rien si la main est perdue).
+    if (mode === 'actif') sauvegarderRoutine()
+    arreterBoucle()
+    desarmerAutoSauvegarde()
+    desarmerBattement()
+    annulerConfirmation()
+    if (mode === 'actif' || mode === 'illisible' || mode === 'confirmation') relacherVerrou()
+    mode = 'arrete'
+  }
+
+  function surVisibilite(): void {
+    if (!portPage.estVisible()) {
+      // EXG-55 / N1 — `hidden` : une sauvegarde, puis tick et auto-sauvegarde suspendus ; seul le
+      // battement continue. Rien d'autre n'écrira la sauvegarde avant le retour.
+      if (mode === 'actif') sauvegarderRoutine()
+      arreterBoucle()
+      desarmerAutoSauvegarde()
+      return
+    }
+    if (mode !== 'actif') return
+    if (!detientVerrou(horloge.maintenantMs())) {
+      perdreVerrou()
+      return
+    }
+    armerAutoSauvegarde()
+    // L'écart est traité tout de suite (hors-ligne si > seuil, ticks sinon), puis la boucle reprend.
+    arreterBoucle()
+    boucle()
+  }
+
+  let arretDefinitif = false
+  const desabonnements: (() => void)[] = [
+    portPage.surVisibiliteChangee(surVisibilite),
+    portPage.surAvantDechargement(() => {
+      if (mode === 'actif') sauvegarderRoutine()
+    }),
+    portPage.surPageHide(suspendre),
+    // `pageshow` part aussi au premier chargement : seul un retour après `pagehide` (bfcache) rejoue.
+    portPage.surPageShow(() => {
+      if (mode === 'arrete' && !arretDefinitif) demarrer()
+    }),
+    canal.recevoir((brut) => {
+      const message = lireMessage(brut)
+      if (message === null || message.idOnglet === idOnglet) return
+      const maintenant = horloge.maintenantMs()
+      if (message.type === 'liberation' && mode === 'secondaire') tenterRelais(maintenant)
+      else if (message.type === 'revendication' && (mode === 'actif' || mode === 'illisible')) {
+        if (!detientVerrou(maintenant)) perdreVerrou()
+      }
+    }),
+  ]
+
+  function arreter(): void {
+    suspendre()
+    arretDefinitif = true
+    for (const desabonner of desabonnements) desabonner()
+    desabonnements.length = 0
+    canal.fermer()
+  }
 
   demarrer()
 

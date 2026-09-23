@@ -29,6 +29,7 @@ import type { EtatJeu } from '../../src/domain/types.ts'
 import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { Disposition } from '../../src/components/hud/Disposition.tsx'
 import {
+  confirmerDemarrage,
   creerCanalFactice,
   creerHorlogeFactice,
   creerMatchMediaFactice,
@@ -42,16 +43,20 @@ import type { StoreJeuApi } from '../../src/state/store.ts'
 const T0 = 1_700_000_000_000
 
 function creerStoreDeTest(etatInitialFn: (horodatageMs: number) => EtatJeu = etatInitial): StoreJeuApi {
-  return creerStoreJeu({
+  const planificateur = creerPortPlanificateurFactice()
+  const store = creerStoreJeu({
     horloge: creerHorlogeFactice(T0),
     stockage: creerStockageFactice(),
     canal: creerCanalFactice(),
     matchMedia: creerMatchMediaFactice(),
     idOnglet: 'onglet-barre-sorts',
     portPage: creerPortPageFactice(),
-    portPlanificateur: creerPortPlanificateurFactice(),
+    portPlanificateur: planificateur,
     etatInitial: etatInitialFn,
   })
+  // T-23a : franchit l'attente « écrire-puis-relire » du verrou.
+  confirmerDemarrage(planificateur)
+  return store
 }
 
 /** École de Glace (2e sort) déjà débloquée : sans ça la touche « 2 » serait refusée comme verrouillée,

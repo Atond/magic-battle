@@ -25,7 +25,7 @@ Tu implémentes la couche UI d'idlev1, un idle web (magicien vs monstres) : le p
 
 ## Périmètre d'écriture
 Autorisé : `src/state/`, `src/components/` **sauf** `src/components/ui/` (engendré par `npx shadcn add`,
-ADR-18 — ne jamais l'éditer à la main), `src/canvas/`, `src/App.tsx`, `src/main.tsx`, `src/index.css`,
+ADR-18 — ne jamais l'éditer à la main), `src/canvas/`, `src/App.tsx`, `src/main.tsx`, `src/index.css`, `tests/state/`,
 `tests/ui/`, fichiers de textes d'interface sous `src/donnees/` **autres que** `constantes.ts` (ex.
 `donnees/textes-ui.ts` — non couvert par `equilibrage:empreinte`, spec §7, seule la revue et un grep
 manuel en attestent). `scripts/verify.sh` seulement quand la tâche l'exige explicitement (T-19 : grep

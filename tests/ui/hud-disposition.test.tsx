@@ -26,6 +26,7 @@ import '../../src/index.css'
 import { etatInitial } from '../../src/domain/moteur.ts'
 import { Disposition } from '../../src/components/hud/Disposition.tsx'
 import {
+  confirmerDemarrage,
   creerCanalFactice,
   creerHorlogeFactice,
   creerMatchMediaFactice,
@@ -38,16 +39,20 @@ import { creerStoreJeu } from '../../src/state/store.ts'
 const T0 = 1_700_000_000_000
 
 function creerStoreDeTest() {
-  return creerStoreJeu({
+  const planificateur = creerPortPlanificateurFactice()
+  const store = creerStoreJeu({
     horloge: creerHorlogeFactice(T0),
     stockage: creerStockageFactice(),
     canal: creerCanalFactice(),
     matchMedia: creerMatchMediaFactice(),
     idOnglet: 'onglet-disposition',
     portPage: creerPortPageFactice(),
-    portPlanificateur: creerPortPlanificateurFactice(),
+    portPlanificateur: planificateur,
     etatInitial,
   })
+  // T-23a : franchit l'attente « écrire-puis-relire » du verrou.
+  confirmerDemarrage(planificateur)
+  return store
 }
 
 /** Aucun débordement horizontal (EXG-35) : le contenu ne dépasse jamais la largeur visible. */

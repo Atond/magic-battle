@@ -13,6 +13,7 @@ import { ETAPES_DEMARRAGE } from '../../src/state/demarrage.ts'
 import type { EtapeDemarrage } from '../../src/state/demarrage.ts'
 import type { OptionsStoreJeu } from '../../src/state/store.ts'
 import {
+  confirmerDemarrage,
   creerCanalFactice,
   creerHorlogeFactice,
   creerMatchMediaFactice,
@@ -54,10 +55,17 @@ function creerEnvironnement(options: { etatInitialFn?: (horodatageMs: number) =>
   return { horloge, stockage, canal, matchMedia, portPage, portPlanificateur, etapes, opts }
 }
 
+/** Crée le store et franchit l'attente « écrire-puis-relire » du verrou (T-23a). */
+function creerEtConfirmer(env: ReturnType<typeof creerEnvironnement>) {
+  const store = creerStoreJeu(env.opts)
+  confirmerDemarrage(env.portPlanificateur)
+  return store
+}
+
 describe('creerStoreJeu — ordre de démarrage (contrat SequenceDemarrage)', () => {
   it('traverse verrou → import → hors-ligne → sauvegarde → boucle → auto-sauvegarde, dans cet ordre exact', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
 
     expect(env.etapes).toEqual([...ETAPES_DEMARRAGE])
     expect(store.getState().pret).toBe(true)
@@ -68,7 +76,7 @@ describe('creerStoreJeu — ordre de démarrage (contrat SequenceDemarrage)', ()
 
   it('la sauvegarde immédiate écrit bien sous la clé préfixée magic-battle:sauvegarde (ADR-21)', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
 
     expect(env.stockage.lire('magic-battle:sauvegarde')).not.toBeNull()
 
@@ -79,7 +87,7 @@ describe('creerStoreJeu — ordre de démarrage (contrat SequenceDemarrage)', ()
 describe('creerStoreJeu — boucle hors React (EXG-1 à EXG-3, EXG-55)', () => {
   it('un delta de 5 s ne produit qu\'une seule notification et vaut 50 ticks (EXG-2)', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
     const etatApresDemarrage = store.getState().etat
 
     let notifications = 0
@@ -101,7 +109,7 @@ describe('creerStoreJeu — boucle hors React (EXG-1 à EXG-3, EXG-55)', () => {
 
   it('aucun setState si le delta ne produit aucun tick (sous 100 ms)', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
 
     let notifications = 0
     const desabonner = store.subscribe(() => {
@@ -119,7 +127,7 @@ describe('creerStoreJeu — boucle hors React (EXG-1 à EXG-3, EXG-55)', () => {
 
   it('un report sous 100 ms n\'est pas perdu : deux frames de 60 ms produisent un tick au total (EXG-2)', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
     const etatApresDemarrage = store.getState().etat
 
     env.horloge.avancer(60)
@@ -135,7 +143,7 @@ describe('creerStoreJeu — boucle hors React (EXG-1 à EXG-3, EXG-55)', () => {
 
   it('un delta au-dessus du seuil nTicksMax × PAS_TICK_MS part vers calculHorsLigne, pas la forme fermée d\'appliquerDelta (EXG-55)', () => {
     const env = creerEnvironnement()
-    const store = creerStoreJeu(env.opts)
+    const store = creerEtConfirmer(env)
     const etatApresDemarrage = store.getState().etat
     const seuilMs = CONSTANTES.tick.nTicksMax * PAS_TICK_MS
 
@@ -160,8 +168,8 @@ describe('creerStoreJeu — isolation multi-onglet (ports dédiés, spec T-18 N5
   it('deux fabriques avec des ports portPage/portPlanificateur distincts reçoivent des événements indépendants', () => {
     const envA = creerEnvironnement()
     const envB = creerEnvironnement()
-    const storeA = creerStoreJeu(envA.opts)
-    const storeB = creerStoreJeu(envB.opts)
+    const storeA = creerEtConfirmer(envA)
+    const storeB = creerEtConfirmer(envB)
 
     const ticksInitiauxA = storeA.getState().etat.ticksEcoules
     const ticksInitiauxB = storeB.getState().etat.ticksEcoules

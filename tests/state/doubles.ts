@@ -2,6 +2,7 @@
 // de `BroadcastChannel` réels ici (ADR-20) : c'est tout l'intérêt de la fabrique injectable — la
 // persistance réelle est branchée par T-23a sur ce même contrat.
 
+import { DELAI_CONFIRMATION_VERROU_MS } from '../../src/state/constantes.ts'
 import type { Canal, Horloge, PortMatchMedia, PortPage, PortPlanificateur, Stockage } from '../../src/state/ports.ts'
 
 /** Horloge pilotable à la main : `maintenantMs()` renvoie la dernière valeur posée par `avancer`/`fixer`. */
@@ -105,11 +106,13 @@ export function creerPortPlanificateurFactice(): PortPlanificateur & {
   readonly framesEnAttente: number
   declencherFrame: () => void
   declencherIntervalle: (id: number) => void
+  /** Déclenche une fois chaque intervalle actif planifié avec exactement `delaiMs`. */
+  declencherIntervallesDe: (delaiMs: number) => void
   idsIntervalleActifs: () => readonly number[]
 } {
   let prochainId = 1
   const frames = new Map<number, (horodatageMs: number) => void>()
-  const intervalles = new Map<number, () => void>()
+  const intervalles = new Map<number, { callback: () => void; delaiMs: number }>()
   return {
     get framesEnAttente() {
       return frames.size
@@ -122,9 +125,9 @@ export function creerPortPlanificateurFactice(): PortPlanificateur & {
     annulerFrame: (id) => {
       frames.delete(id)
     },
-    planifierIntervalle: (callback) => {
+    planifierIntervalle: (callback, delaiMs) => {
       const id = prochainId++
-      intervalles.set(id, callback)
+      intervalles.set(id, { callback, delaiMs })
       return id
     },
     annulerIntervalle: (id) => {
@@ -138,8 +141,21 @@ export function creerPortPlanificateurFactice(): PortPlanificateur & {
       for (const [, callback] of enCours) callback(0)
     },
     declencherIntervalle: (id) => {
-      intervalles.get(id)?.()
+      intervalles.get(id)?.callback()
+    },
+    declencherIntervallesDe: (delaiMs) => {
+      const cibles = [...intervalles.values()].filter((i) => i.delaiMs === delaiMs)
+      for (const intervalle of cibles) intervalle.callback()
     },
     idsIntervalleActifs: () => [...intervalles.keys()],
   }
+}
+
+/**
+ * T-23a — le démarrage n'est plus synchrone : le verrou n'est tenu qu'après l'attente « écrire-puis-
+ * relire » (`DELAI_CONFIRMATION_VERROU_MS`). Les tests qui ne portent pas sur le verrou la franchissent
+ * avec cette seule ligne, sans horloge réelle.
+ */
+export function confirmerDemarrage(planificateur: { declencherIntervallesDe: (delaiMs: number) => void }): void {
+  planificateur.declencherIntervallesDe(DELAI_CONFIRMATION_VERROU_MS)
 }

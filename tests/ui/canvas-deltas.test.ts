@@ -81,6 +81,8 @@ describe('réglage performance — lecture try/catch, fixtures hostiles (EXG-29/
     ['chaîne JSON au lieu d’un objet', '"true"'],
     ['nombre JSON au lieu d’un objet', '1'],
     ['JSON invalide', '{invalide'],
+    ['clé étrangère à côté d’un champ performance mal typé', '{"inconnue":1,"performance":"true"}'],
+    ['tableau JSON au lieu d’un objet', '[true]'],
   ]
 
   for (const [libelle, brut] of fixturesHostiles) {

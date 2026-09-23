@@ -34,6 +34,7 @@ import { CLE_REGLAGES } from '../../src/canvas/reglages.ts'
 import { creerStoreJeu } from '../../src/state/store.ts'
 import type { StoreJeuApi } from '../../src/state/store.ts'
 import {
+  confirmerDemarrage,
   creerCanalFactice,
   creerHorlogeFactice,
   creerMatchMediaFactice,
@@ -50,16 +51,20 @@ function creerStoreDeTest(params: {
   readonly stockage?: Stockage
   readonly etatInitialFn?: (horodatageMs: number) => EtatJeu
 }): StoreJeuApi {
-  return creerStoreJeu({
+  const planificateur = creerPortPlanificateurFactice()
+  const store = creerStoreJeu({
     horloge: creerHorlogeFactice(T0),
     stockage: params.stockage ?? creerStockageFactice(),
     canal: creerCanalFactice(),
     matchMedia: creerMatchMediaFactice(params.reduitPrefere ?? false),
     idOnglet: 'onglet-canvas-combat',
     portPage: creerPortPageFactice(),
-    portPlanificateur: creerPortPlanificateurFactice(),
+    portPlanificateur: planificateur,
     etatInitial: params.etatInitialFn ?? etatInitial,
   })
+  // T-23a : franchit l'attente « écrire-puis-relire » du verrou.
+  confirmerDemarrage(planificateur)
+  return store
 }
 
 /**

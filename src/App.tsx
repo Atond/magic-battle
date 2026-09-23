@@ -4,29 +4,30 @@
 // deux jeux de minuteurs dont un seul serait jamais nettoyé. L'évaluation d'un module, elle, n'a lieu
 // qu'une fois quel que soit le mode — c'est le bon endroit pour un singleton qui vit toute la session.
 //
-// Ports navigateur minimaux (horloge, planificateur, page réels) ; persistance encore en mémoire — la
-// persistance réelle (localStorage/BroadcastChannel, ADR-21) et le verrou multi-onglet fonctionnel sont
-// T-23a.
+// Ports navigateur réels (T-23a) : `localStorage` et `BroadcastChannel` préfixés `magic-battle:`
+// (ADR-21), verrou multi-onglet, cycle de vie de page. Le bandeau de lecture seule et l'écran EXG-27
+// (qui lisent `lectureSeule`/`sauvegardeIllisible`) sont T-23b.
 
 import { etatInitial } from './domain/moteur.ts'
 import { Disposition } from './components/hud/Disposition.tsx'
 import { TEXTES_UI } from './donnees/textes-ui.ts'
 import { creerStoreJeu } from './state/store.ts'
 import { useStoreJeu } from './state/hooks.ts'
+import { NOM_CANAL_VERROU } from './state/constantes.ts'
 import {
-  creerCanalMemoire,
+  creerCanalDiffusion,
   creerHorlogeNavigateur,
   creerIdOnglet,
   creerMatchMediaNavigateur,
   creerPortPageNavigateur,
   creerPortPlanificateurNavigateur,
-  creerStockageMemoire,
+  creerStockageLocal,
 } from './state/portsNavigateur.ts'
 
 const store = creerStoreJeu({
   horloge: creerHorlogeNavigateur(),
-  stockage: creerStockageMemoire(),
-  canal: creerCanalMemoire(),
+  stockage: creerStockageLocal(),
+  canal: creerCanalDiffusion(NOM_CANAL_VERROU),
   matchMedia: creerMatchMediaNavigateur(),
   idOnglet: creerIdOnglet(),
   portPage: creerPortPageNavigateur(),

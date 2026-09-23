@@ -130,8 +130,15 @@ export function CanvasCombat({ store }: { readonly store: StoreJeuApi }) {
       return document.visibilityState === 'visible' && canvas!.offsetParent !== null
     }
 
+    function jeuFige(): boolean {
+      // EXG-48 / EXG-27 (T-23a) — onglet secondaire ou sauvegarde illisible : le moteur ne tourne pas, le
+      // canvas non plus (lecture directe hors React, comme le reste de cette boucle).
+      const s = store.getState()
+      return s.lectureSeule || s.sauvegardeIllisible !== null
+    }
+
     function frame(): void {
-      if (!estCanvasVisible()) {
+      if (!estCanvasVisible() || jeuFige()) {
         // Aucune donnée ne se périme : on efface juste la référence pour ne pas produire une salve de
         // rattrapage géante au moment où ce panneau redevient visible.
         precedentRef.current = null
