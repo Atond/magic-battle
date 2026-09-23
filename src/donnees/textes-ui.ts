@@ -43,8 +43,15 @@ export const TEXTES_UI = {
 
   combat: {
     titre: 'Combat',
-    placeholder: 'La zone de combat arrive avec le canvas (bientôt, promis).',
     boutonClic: 'Frapper',
+    aucuneCible: 'Rien à taper pour l’instant.',
+    pv: (courants: number, max: number) => `PV ${courants} / ${max}`,
+    timerBoss: (secondes: number) => `Boss — ${secondes} s`,
+    monstreVaincu: (nom: string) => `${nom || 'Le monstre'} est tombé.`,
+    bossEnApproche: (nom: string) => `${nom || 'Un boss'} entre en scène.`,
+    interrupteurPerformance: 'Effets visuels de combat',
+    performanceActivee: 'Effets réduits',
+    performanceDesactivee: 'Effets complets',
   },
 
   sorts: {

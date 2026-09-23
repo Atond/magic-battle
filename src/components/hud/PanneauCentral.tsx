@@ -1,7 +1,9 @@
-// Colonne centrale (T-19/T-20) : emplacement du canvas de combat (T-21, pas dessiné ici), zone de clic
-// dédiée (EXG-11, sort de clic → `appliquerClic` du moteur) et barre de sorts actifs (T-20, EXG-11 à
-// EXG-14, EXG-51). Aucune formule ici : le clic et les sorts appellent le store, qui appelle le moteur.
+// Colonne centrale (T-19/T-20/T-21) : canvas de combat (`src/canvas/CanvasCombat.tsx`, rendu procédural,
+// EXG-29/30/32/33/50/52), zone de clic dédiée (EXG-11, sort de clic → `appliquerClic` du moteur) et barre
+// de sorts actifs (T-20, EXG-11 à EXG-14, EXG-51). Aucune formule ici : le clic et les sorts appellent le
+// store, qui appelle le moteur.
 
+import { CanvasCombat } from '../../canvas/CanvasCombat.tsx'
 import { BarreSorts } from './BarreSorts.tsx'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
@@ -12,12 +14,7 @@ export function PanneauCentral({ store }: { readonly store: StoreJeuApi }) {
 
   return (
     <section aria-label={TEXTES_UI.combat.titre} className="flex flex-col gap-2 p-2">
-      <div
-        data-testid="emplacement-canvas"
-        className="flex min-h-48 flex-1 items-center justify-center rounded-md border border-dashed border-[var(--couleur-charbon-bordure)] bg-[var(--couleur-charbon-900)] px-4 py-6 text-center text-sm text-[var(--couleur-charbon-texte-attenue)]"
-      >
-        {TEXTES_UI.combat.placeholder}
-      </div>
+      <CanvasCombat store={store} />
       <button
         type="button"
         data-testid="bouton-clic"

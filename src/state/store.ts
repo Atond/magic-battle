@@ -77,6 +77,15 @@ export interface EtatStoreJeu {
 export type StoreJeuApi = StoreApi<EtatStoreJeu> & {
   /** Arrête boucle, auto-sauvegarde et battement, et relâche le verrou si cet onglet le détenait. */
   readonly arreter: () => void
+  /**
+   * Ports bruts, exposés pour un usage strictement hors moteur (T-21, `src/canvas/reglages.ts` :
+   * réglage `performance`, clé `magic-battle:reglages`, hors sauvegarde, ADR-21). Ne jamais s'en servir
+   * pour de l'état de JEU — ça, c'est `actions` et les sélecteurs Zustand ; ceci ne fait que réutiliser
+   * la même instance de port que `creerStoreJeu` (pas de second `localStorage`/`matchMedia` câblé en
+   * parallèle).
+   */
+  readonly stockage: Stockage
+  readonly matchMedia: PortMatchMedia
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ clés de stockage */
@@ -328,7 +337,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
 
   demarrer()
 
-  return Object.assign(store, { arreter })
+  return Object.assign(store, { arreter, stockage, matchMedia })
 }
 
 // Rappel du contrat traversé par `demarrer()`, pour que l'implémentation et sa documentation ne divergent

@@ -93,7 +93,7 @@ describe('disposition HUD — 3 colonnes desktop / pile + onglets mobile (spec �
 
     // `PanneauCentral` existe dans les deux arborescences (desktop + mobile) ; `getByTestId` ne filtre
     // pas les éléments masqués (contrairement à `getByRole`), donc on prend celui qui a une taille réelle.
-    const combat = getAllByTestId('emplacement-canvas').find((el) => el.getBoundingClientRect().width > 0)
+    const combat = getAllByTestId('conteneur-canvas').find((el) => el.getBoundingClientRect().width > 0)
     expect(combat).toBeDefined()
     const rectCombat = combat!.getBoundingClientRect()
     const rectOnglets = onglets[0].getBoundingClientRect()
