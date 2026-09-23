@@ -55,6 +55,9 @@ break_infinity tant que le simulateur ne dépasse pas 1e300. Français partout :
 - Points d'entrée : `/ship` (`.claude/skills/ship/`), `/equilibrer` (`.claude/skills/equilibrer/`) — posés.
 - Skills projet posés : `preuve-du-rouge` — à dérouler avant de déclarer fait tout garde-fou (test, étape
   de `verify.sh`, grep d'invariant) : injecter la faute, constater le rouge, choisir le bon instrument.
+  `test-navigateur-ui` — les dix pièges des tests `tests/ui/`/`tests/state/` (CSS absent, thème `dark`,
+  cleanup, `act()`, démarrage à 500 ms, doublons desktop/mobile, vrais événements, vrais composants,
+  cooldown qui masque un doublon, chevauchement à prouver rouge) et les doubles à réutiliser.
 - Skills projet à venir : `sauvegarde-migration` (au 1er champ obligatoire ajouté à l'état, pas avant),
   `ajouter-ecole-sort`, `ajouter-zone-monstres`.
 - Skills externes réutilisés : `atelier:idle-balance`, `vercel:shadcn`, `vercel:react-best-practices`.

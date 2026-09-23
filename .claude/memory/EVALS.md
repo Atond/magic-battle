@@ -35,7 +35,11 @@
 
 ## EVAL-002 — Budget de rendu canvas (EXG-52) (2026-09-20)
 - **Mesure :** appels de dessin par frame ≤ `N_PROJECTILES_MAX = 200` (déterministe) ; ms/frame informatif.
-- **Valeur actuelle :** non mesuré (vague 2).
+- **Valeur actuelle (2026-09-23, fin de vague 2) :** plafond tenu et prouvé de façon déterministe
+  (`tests/ui/canvas-limite.test.ts`, `canvas-deltas.test.ts` : > 200 demandes → ≤ 200 dessins, plus anciens
+  supprimés ; écart de compteur de `MAX_SAFE_INTEGER` borné avant allocation). Le temps de frame est exposé
+  en `data-dernier-frame-ms` sur le canvas mais **n'a pas encore été relevé** sur un scénario saturé :
+  à faire en vague 3 (informatif, jamais bloquant).
 
 ## EVAL-003 — Porte de qualité (2026-09-20)
 - **Mesure :** `bash scripts/verify.sh` vert (pureté domain/, aucune graine dans src/, typecheck, lint, test,
@@ -50,3 +54,8 @@
   imports à effet de bord ou dynamiques de react/zustand, import de `src/donnees/` ou `src/state/` depuis
   `src/domain/`, marqueurs de chantier en majuscules, constante de `src/donnees/` retouchée à la main qui
   resterait dans les clous. Les sept familles ont été vues rougir par injection.
+- **Valeur (2026-09-23, fin de vague 2) :** vert sur **10 étapes** — les 8 précédentes, plus le grep EXG-47
+  (voies HTML brutes sur `src/` et `index.html`) et `palette:ratios` (14 paires WCAG). **492 tests** dont les
+  tests navigateur (Chromium). Vert en CI sur la PR #4 en 1 min 14 s, premier passage avec Chromium (cache
+  vide ; les passages suivants le restaurent). Aucun chemin de saut pour les tests navigateur. Durée
+  locale 16,2 s (contre ~9,4 s en vague 1) : le hook Stop reste supportable.
