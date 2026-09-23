@@ -68,7 +68,7 @@ export const TEXTES_REGIONS: readonly TexteRegion[] = [
     ambiance: 'Un pont, une rivière, et un troll qui a lu un livre sur l’entrepreneuriat.',
     monstres: ['Canard douanier', 'Troll stagiaire', 'Poisson à contresens'],
     boss: {
-      nom: 'Grobert, gardien du pont',
+      nom: 'Grobert, péagiste du pont',
       description: 'Réclame un péage. Ne rend pas la monnaie.',
     },
     gardien: {

@@ -54,7 +54,7 @@ export const TEXTES_FIN: {
     titre: 'Fin de service',
     lignes: [
       'Le Patron des Monstres a rendu son badge. Il n’y a plus personne à taper.',
-      'Ton or, lui, continue d’affluer. Personne ne l’a prévenu.',
+      'Tes pièces tombent encore par habitude. Personne n’a osé leur dire.',
       'Merci d’avoir tapé si longtemps. Va boire un verre d’eau, tu l’as mérité.',
     ],
   },

@@ -17,7 +17,7 @@ export const QUETES = CONSTANTES.quetes
 export const TEXTES_QUETES: Readonly<Record<string, TexteContenu>> = {
   'quete-zone-2': {
     nom: 'Un pied dehors',
-    description: 'Sors du potager. Les navets comprendront. Ou pas.',
+    description: 'Fais un pas de plus. Les navets comprendront. Ou pas.',
   },
   'quete-zone-4': {
     nom: 'Tourisme de combat',
@@ -49,7 +49,7 @@ export const TEXTES_QUETES: Readonly<Record<string, TexteContenu>> = {
   },
   'quete-tuer-10000': {
     nom: 'Fléau des monstres',
-    description: 'Les monstres ont fait une réunion à ton sujet. Tu n’étais pas invité.',
+    description: 'Les monstres ont fait une réunion à ton sujet. Personne ne t’a invité.',
   },
   'quete-tuer-100000': {
     nom: 'Cauchemar certifié',

@@ -35,7 +35,10 @@ function CarteEcole({ store, id }: { readonly store: StoreJeuApi; readonly id: I
           🔒
         </span>
         <span className="text-sm text-[var(--couleur-charbon-texte-attenue)]">
-          {TEXTES_UI.ecoles.verrouillee} — {TEXTES_UI.ecoles.verrouilleeDetail}
+          {TEXTES_UI.ecoles.verrouillee} —{' '}
+          {CONSTANTES.ecoles[id].requiertAscension
+            ? TEXTES_UI.ecoles.verrouilleeDetailAscension
+            : TEXTES_UI.ecoles.verrouilleeDetail}
         </span>
       </li>
     )

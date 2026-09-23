@@ -16,7 +16,8 @@ import { act, render } from '@testing-library/react'
 import '../../src/index.css'
 
 import { etatInitial } from '../../src/domain/moteur.ts'
-import type { EtatJeu, Monstre } from '../../src/domain/types.ts'
+import type { EtatJeu, IdEcole, Monstre } from '../../src/domain/types.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { TEXTES_AMELIORATIONS } from '../../src/donnees/ameliorations.ts'
 import { TEXTES_NOEUDS } from '../../src/donnees/arbres.ts'
 import { TEXTES_ECOLES } from '../../src/donnees/ecoles.ts'
@@ -39,6 +40,24 @@ function etatZone12(horodatageMs: number): EtatJeu {
 }
 
 describe('vague 3 — textes définitifs dans les panneaux', () => {
+  // Revue de fin de vague 3 : la carte scellée de la Lumière invitait à « taper un boss » alors qu'elle
+  // n'est révélée que par une Ascension (`requiertAscension`). Le texte doit suivre la règle du moteur.
+  it('école scellée : le texte dit comment la révéler (boss de zone ou Ascension)', async () => {
+    await page.viewport(1440, 900)
+    const store = creerStoreDeTest()
+    const { getByRole, unmount } = render(<Disposition store={store} />)
+    try {
+      const ecoles = getByRole('region', { name: TEXTES_UI.ecoles.titre }).textContent ?? ''
+      const scellees = (Object.keys(CONSTANTES.ecoles) as IdEcole[]).filter((id) => id !== 'feu')
+      const parAscension = scellees.filter((id) => CONSTANTES.ecoles[id].requiertAscension)
+      expect(parAscension.length).toBeGreaterThan(0)
+      expect(ecoles.split(TEXTES_UI.ecoles.verrouilleeDetailAscension).length - 1).toBe(parAscension.length)
+      expect(ecoles.split(TEXTES_UI.ecoles.verrouilleeDetail).length - 1).toBe(scellees.length - parAscension.length)
+    } finally {
+      unmount()
+    }
+  })
+
   it('1440 px : écoles, sorts, améliorations, équipement, nœuds d’Éclats', async () => {
     await page.viewport(1440, 900)
     const store = creerStoreDeTest()

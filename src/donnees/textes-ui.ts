@@ -30,6 +30,8 @@ export const TEXTES_UI = {
     titre: 'Écoles',
     verrouillee: 'École scellée',
     verrouilleeDetail: 'Un boss la garde sous clé. Tape-le, elle est à toi.',
+    // Écoles révélées par une Ascension (`requiertAscension`), pas par un boss de zone.
+    verrouilleeDetailAscension: 'Celle-là ne se gagne pas au combat. Il faudra t’élever un peu.',
     niveau: (niveau: number) => `Niveau ${niveau}`,
     acheter: 'Étudier',
   },
@@ -100,7 +102,7 @@ export const TEXTES_UI = {
   zoneFinale: {
     // Nom et description de la zone et du boss : `TEXTES_FIN` (`fin.ts`). Ici, l'habillage de l'encart.
     titre: 'Zone finale',
-    ouverte: 'Tu es monté assez haut : une porte s’est ouverte au fond du couloir.',
+    ouverte: 'Assez d’Ascensions au compteur : une porte s’est ouverte au fond du couloir.',
     boss: 'Derrière la porte',
     chrono: (secondes: number) => `${secondes} s pour le battre. Raté ? Tu reviens quand tu veux, sans rien perdre.`,
     entrer: 'Entrer dans le bureau',
@@ -136,7 +138,7 @@ export const TEXTES_UI = {
 
   stockagePlein: {
     message:
-      'Ta progression n’est plus sauvegardée : le navigateur refuse d’en stocker davantage. Exporte ta sauvegarde pour ne rien perdre.',
+      'Ta progression n’est plus sauvegardée : le navigateur refuse d’en stocker davantage. Fais de la place dans ses données de sites, sinon tout ce que tu gagnes s’envole à la fermeture.',
   },
 
   // Durées affichées (encart hors-ligne, écran de fin) : les nombres arrivent déjà arrondis.
@@ -157,7 +159,7 @@ export const TEXTES_UI = {
     bouton: 'Prestiger',
     boutonVerrouille: 'Partie terminée',
     etape1Titre: 'Recommencer le run ?',
-    etape1Intro: (zone: number) => `Zone atteinte : ${zone}. Le run repart de zéro, mais rien n’est perdu pour de bon.`,
+    etape1Intro: (zone: number) => `Zone atteinte : ${zone}. Le run repart de zéro, tes Éclats restent.`,
     etape1Perte: (or: string, niveaux: number) => `Tu laisses ${or} or et ${niveaux} niveau${niveaux > 1 ? 'x' : ''} d’écoles derrière toi.`,
     etape1Continuer: 'Continuer',
     etape2Titre: 'Confirme le prestige',
