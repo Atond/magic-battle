@@ -24,6 +24,7 @@ import { PanneauCentral } from './PanneauCentral.tsx'
 import { PanneauEcoles } from './PanneauEcoles.tsx'
 import { PanneauEquipement } from './PanneauEquipement.tsx'
 import { PanneauPrestige } from './PanneauPrestige.tsx'
+import { PanneauQuetes } from './PanneauQuetes.tsx'
 import { useUneModaleEstOuverte } from './modaleOuverteGlobale.ts'
 
 type OngletMobile = 'ecoles' | 'ameliorations' | 'prestige'
@@ -34,12 +35,17 @@ const ONGLETS: readonly { readonly id: OngletMobile; readonly libelle: string }[
   { id: 'prestige', libelle: TEXTES_UI.onglets.prestige },
 ]
 
-/** Améliorations + équipement + arbre d'Éclats : les trois guichets d'achat, sans le prestige. */
+/**
+ * Améliorations + équipement + quêtes + arbre d'Éclats. Les quêtes sont rangées juste après
+ * l'équipement : c'est leur Renommée qui le paie (EXG-10), le joueur voit d'où vient la monnaie à côté
+ * de ce qu'elle achète — même onglet « Améliorations » sur mobile.
+ */
 function ColonneAchats({ store }: { readonly store: StoreJeuApi }) {
   return (
     <>
       <PanneauAmeliorations store={store} />
       <PanneauEquipement store={store} />
+      <PanneauQuetes store={store} />
       <PanneauArbreEclats store={store} />
     </>
   )
