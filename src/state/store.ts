@@ -13,7 +13,11 @@ import { NOM_PRINCIPAL, exporterTexte, importerTexte, planifierImport } from '..
 import { revendiquer, renouveler, liberer } from '../domain/sauvegarde/verrou.ts'
 import type { EtatVerrou } from '../domain/sauvegarde/verrou.ts'
 import type { PlanEcrasement } from '../domain/sauvegarde/index.ts'
-import type { EtatJeu, ResumeHorsLigne } from '../domain/types.ts'
+import { acheterNiveaux } from '../domain/ecoles/index.ts'
+import { acheterAmelioration } from '../domain/ameliorations/index.ts'
+import { acheterEquipement } from '../domain/equipement/index.ts'
+import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
+import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
 import {
   DELAI_EXPIRATION_VERROU_MS,
@@ -46,6 +50,15 @@ export interface ActionsStoreJeu {
   readonly clic: () => void
   /** EXG-12 — déclenche un sort actif par identifiant. Même garde que `clic`. */
   readonly lancerSort: (idSort: string) => void
+  /** EXG-8 / EXG-9 — achète un niveau d'école (T-19). Refus silencieux : aucune formule ici, tout passe
+   *  par `acheterNiveaux` (`src/domain/ecoles/index.ts`), l'UI n'affiche que le résultat. */
+  readonly acheterEcole: (id: IdEcole) => void
+  /** EXG-42 — achète un palier d'amélioration (or), même garde `droitEcriture`. */
+  readonly acheterAmelioration: (id: string) => void
+  /** EXG-43 — achète un palier d'équipement (Renommée), même garde `droitEcriture`. */
+  readonly acheterEquipement: (id: string) => void
+  /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde `droitEcriture`. */
+  readonly acheterNoeudEclats: (id: string) => void
 }
 
 export interface EtatStoreJeu {
@@ -146,6 +159,22 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
         if (!get().droitEcriture) return
         const resultat = lancerSort(get().etat, idSort, CONSTANTES)
         set({ etat: resultat.etat })
+      },
+      acheterEcole: (id: IdEcole) => {
+        if (!get().droitEcriture) return
+        set({ etat: acheterNiveaux(get().etat, id, 1, CONSTANTES).etat })
+      },
+      acheterAmelioration: (id: string) => {
+        if (!get().droitEcriture) return
+        set({ etat: acheterAmelioration(get().etat, id, CONSTANTES).etat })
+      },
+      acheterEquipement: (id: string) => {
+        if (!get().droitEcriture) return
+        set({ etat: acheterEquipement(get().etat, id, CONSTANTES).etat })
+      },
+      acheterNoeudEclats: (id: string) => {
+        if (!get().droitEcriture) return
+        set({ etat: acheterNoeudArbre(get().etat, id, 1, 'eclats', CONSTANTES).etat })
       },
     },
   }))

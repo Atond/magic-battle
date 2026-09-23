@@ -93,6 +93,19 @@ else
   ignore "graines dans src/" "dossier absent"
 fi
 
+# --- (h) aucun rendu HTML non filtré dans src/ (EXG-47) : toujours actif dès que src existe ---
+if [ -d src ]; then
+  # Une sauvegarde ou un texte hostile traverse la couche d'affichage comme une chaîne, jamais comme du
+  # balisage (spec EXG-47) : `dangerouslySetInnerHTML` (React), `.innerHTML`/`.insertAdjacentHTML` (DOM)
+  # sont les trois portes qui feraient exécuter un `<img onerror=…>` planqué dans un nom de sauvegarde.
+  html_non_filtre="$(grep -rEn 'dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML' src --include='*.ts' --include='*.tsx' 2>/dev/null | grep -vE ':[[:space:]]*(//|\*|/\*)' || true)"
+  if [ -n "$html_non_filtre" ]; then
+    echo "$html_non_filtre"; echec "aucun rendu HTML non filtré dans src/ (dangerouslySetInnerHTML/innerHTML/insertAdjacentHTML — EXG-47)"
+  else ok "aucun rendu HTML non filtré dans src/ (EXG-47)"; fi
+else
+  ignore "rendu HTML non filtré dans src/" "dossier absent"
+fi
+
 # --- étapes npm (tolérantes) ---
 etape_npm typecheck          "typecheck"
 etape_npm lint               "lint"

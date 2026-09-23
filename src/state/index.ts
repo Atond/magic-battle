@@ -5,3 +5,12 @@ export { useStoreJeu } from './hooks.ts'
 export { ETAPES_DEMARRAGE } from './demarrage.ts'
 export type { EtapeDemarrage } from './demarrage.ts'
 export type { Canal, Horloge, PortMatchMedia, PortPage, PortPlanificateur, Stockage } from './ports.ts'
+export {
+  creerCanalMemoire,
+  creerHorlogeNavigateur,
+  creerIdOnglet,
+  creerMatchMediaNavigateur,
+  creerPortPageNavigateur,
+  creerPortPlanificateurNavigateur,
+  creerStockageMemoire,
+} from './portsNavigateur.ts'
