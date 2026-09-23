@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { BandeauHaut } from './BandeauHaut.tsx'
+import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
 import { PanneauCentral } from './PanneauCentral.tsx'
@@ -48,7 +49,7 @@ function DispositionDesktop({ store }: { readonly store: StoreJeuApi }) {
         <PanneauEcoles store={store} />
       </div>
       <div className="flex flex-col overflow-y-auto">
-        <PanneauCentral />
+        <PanneauCentral store={store} />
       </div>
       <div className="flex flex-col gap-2 overflow-y-auto">
         <ColonneAchats store={store} />
@@ -63,7 +64,7 @@ function DispositionMobile({ store }: { readonly store: StoreJeuApi }) {
 
   return (
     <div className="flex flex-col gap-2 p-2 lg:hidden">
-      <PanneauCentral />
+      <PanneauCentral store={store} />
       <div role="tablist" aria-label={TEXTES_UI.titre} className="flex gap-1 border-b border-[var(--couleur-charbon-bordure)]">
         {ONGLETS.map((o) => (
           <button
@@ -88,6 +89,10 @@ function DispositionMobile({ store }: { readonly store: StoreJeuApi }) {
 }
 
 export function Disposition({ store }: { readonly store: StoreJeuApi }) {
+  // Une seule fois pour toute la disposition (EXG-13/EXG-34) : `PanneauCentral` est monté deux fois en
+  // parallèle (desktop caché + mobile visible), voir le commentaire de `useRaccourcisSorts`.
+  useRaccourcisSorts(store)
+
   return (
     <div className="min-h-screen bg-[var(--couleur-charbon-950)]">
       <BandeauHaut store={store} />

@@ -44,10 +44,16 @@ export const TEXTES_UI = {
   combat: {
     titre: 'Combat',
     placeholder: 'La zone de combat arrive avec le canvas (bientôt, promis).',
+    boutonClic: 'Frapper',
   },
 
   sorts: {
-    placeholder: 'Barre de sorts — tes doigts pourront s’en servir bientôt.',
+    titre: 'Sorts actifs',
+    touche: (touche: number) => `Touche ${touche}`,
+    verrouille: 'Sort verrouillé',
+    verrouilleDetail: 'Débloque son école pour t’en servir.',
+    enCooldown: (secondes: number) => `Encore ${secondes} s`,
+    pret: 'Prêt',
   },
 
   ameliorations: {
