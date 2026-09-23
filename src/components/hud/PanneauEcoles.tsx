@@ -7,6 +7,7 @@ import { coutProchainNiveau, ecoleAccessible } from '../../domain/ecoles/index.t
 import { formater } from '../../domain/notation.ts'
 import type { IdEcole } from '../../domain/types.ts'
 import { CONSTANTES } from '../../donnees/constantes.ts'
+import { TEXTES_ECOLES } from '../../donnees/ecoles.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
@@ -49,13 +50,12 @@ function CarteEcole({ store, id }: { readonly store: StoreJeuApi; readonly id: I
       style={{ borderLeftColor: accent }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-[var(--couleur-charbon-texte)]">
-          {TEXTES_UI.ecoles.noms[id]}
-        </span>
+        <span className="font-medium text-[var(--couleur-charbon-texte)]">{TEXTES_ECOLES[id].nom}</span>
         <span className="text-xs text-[var(--couleur-charbon-texte-attenue)]">
           {TEXTES_UI.ecoles.niveau(niveau)}
         </span>
       </div>
+      <p className="text-xs text-[var(--couleur-charbon-texte-attenue)]">{TEXTES_ECOLES[id].description}</p>
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"

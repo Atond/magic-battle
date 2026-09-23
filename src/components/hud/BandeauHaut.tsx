@@ -8,6 +8,7 @@ import { formater } from '../../domain/notation.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
+import { indexRegion, regionParIndex } from '../../state/contenu.ts'
 
 function Jauge({ libelle, valeur }: { readonly libelle: string; readonly valeur: string }) {
   return (
@@ -40,6 +41,12 @@ function JaugeZone({ store }: { readonly store: StoreJeuApi }) {
   return <Jauge libelle={TEXTES_UI.bandeau.zone} valeur={String(zone)} />
 }
 
+/** Vague 3 — région de contenu de la zone courante ; ne re-rend qu'au changement de région (10 zones). */
+function JaugeRegion({ store }: { readonly store: StoreJeuApi }) {
+  const index = useStoreJeu(store, (s) => indexRegion(s.etat.combat.zone))
+  return <Jauge libelle={TEXTES_UI.bandeau.region} valeur={regionParIndex(index).nom} />
+}
+
 export function BandeauHaut({ store }: { readonly store: StoreJeuApi }) {
   return (
     <header
@@ -53,6 +60,7 @@ export function BandeauHaut({ store }: { readonly store: StoreJeuApi }) {
       <JaugeRenommee store={store} />
       <JaugeEclats store={store} />
       <JaugeZone store={store} />
+      <JaugeRegion store={store} />
     </header>
   )
 }

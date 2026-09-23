@@ -2,10 +2,10 @@
 // `equilibrage:empreinte` ne couvre que `src/donnees/constantes.ts`, celui-ci est attesté par revue et
 // par grep manuel (spec §7, note sous « Bibliothèque »).
 //
-// Noms de travail des écoles/sorts/améliorations/équipement/nœuds d'arbre (Feu, Glace, École 3…) :
-// la vague 3 (T-24 à T-27) les remplacera par le contenu définitif sans toucher aux identifiants du
-// moteur (`IdEcole`, `id` de `ParametresSort`/`ParametresAchatMultiplicatif`/`ParametresNoeudArbre`).
-// Ton du guide §7 : familier, jamais grandiloquent — même sur un texte de travail.
+// Les noms et descriptions de contenu (écoles, sorts, zones, quêtes, arbres, fin) ne sont pas ici : ils
+// vivent à côté de leurs nombres, dans `ecoles.ts`, `sorts.ts`, `zones.ts`, `quetes.ts`, `arbres.ts`,
+// `ameliorations.ts`, `equipement.ts` et `fin.ts` (vague 3). Ce fichier ne garde que le texte de
+// l'interface elle-même. Ton du guide §7 : familier, clair d'abord, jamais grandiloquent.
 
 export const TEXTES_UI = {
   titre: 'Magic Battle',
@@ -17,6 +17,7 @@ export const TEXTES_UI = {
     renommee: 'Renommée',
     eclats: 'Éclats',
     zone: 'Zone',
+    region: 'Région',
   },
 
   onglets: {
@@ -31,14 +32,6 @@ export const TEXTES_UI = {
     verrouilleeDetail: 'Un boss la garde sous clé. Tape-le, elle est à toi.',
     niveau: (niveau: number) => `Niveau ${niveau}`,
     acheter: 'Étudier',
-    noms: {
-      feu: 'Feu',
-      glace: 'Glace',
-      ecole3: 'École 3',
-      ecole4: 'École 4',
-      ecole5: 'École 5',
-      lumiere: 'Lumière',
-    } as const,
   },
 
   combat: {
@@ -72,10 +65,6 @@ export const TEXTES_UI = {
     sousTitre: 'Payées en or, celui qui bosse même quand tu dors.',
     acheter: 'Améliorer',
     palier: (palier: number) => `Palier ${palier}`,
-    noms: {
-      'amelioration-1': 'Bâton amplifié',
-      'amelioration-2': 'Grimoire renforcé',
-    } as const,
   },
 
   equipement: {
@@ -83,10 +72,6 @@ export const TEXTES_UI = {
     sousTitre: 'Payé en Renommée. La gloire, ça se dépense aussi.',
     acheter: 'Équiper',
     palier: (palier: number) => `Palier ${palier}`,
-    noms: {
-      'equipement-1': 'Amulette',
-      'equipement-2': 'Anneau',
-    } as const,
   },
 
   arbreEclats: {
@@ -96,18 +81,46 @@ export const TEXTES_UI = {
     rang: (rang: number) => `Rang ${rang}`,
     rangMax: 'Rang maximal atteint',
     verrouille: 'Prérequis manquant',
-    noms: {
-      'eclats-degats-1': 'Frappe éclatante I',
-      'eclats-degats-2': 'Frappe éclatante II',
-      'eclats-degats-3': 'Frappe éclatante III',
-      'eclats-degats-infini': 'Frappe sans fond',
-      'eclats-or-1': 'Bourse enchantée I',
-      'eclats-or-2': 'Bourse enchantée II',
-      'eclats-or-3': 'Bourse enchantée III',
-      'eclats-zone-depart': 'Tremplin de zone',
-      'eclats-cooldown-1': 'Réflexes affûtés I',
-      'eclats-cooldown-2': 'Réflexes affûtés II',
-    } as const,
+  },
+
+  quetes: {
+    titre: 'Quêtes',
+    sousTitre: 'Chacune paie sa Renommée une fois. Pas deux, on a vérifié.',
+    objectifZone: (zone: string) => `Objectif : atteindre la zone ${zone}`,
+    objectifMonstres: (nombre: string) => `Objectif : ${nombre} monstres au tapis`,
+    objectifPremierPrestige: 'Objectif : un premier prestige',
+    recompense: (renommee: string) => `+${renommee} Renommée`,
+    accomplie: 'Accomplie',
+    pasEncore: 'Pas encore',
+  },
+
+  narration: {
+    // Préfixe lu par les lecteurs d'écran seulement : l'encart s'annonce comme un bout d'histoire, pas
+    // comme une erreur ou un résumé chiffré.
+    etiquette: 'Histoire',
+  },
+
+  fin: {
+    // Le titre et les lignes de l'écran de fin viennent de `TEXTES_FIN` (`fin.ts`) ; ici, les libellés
+    // des statistiques et le bouton.
+    statistiques: 'Ta partie en chiffres',
+    duree: 'Temps de jeu',
+    zoneMax: 'Zone la plus lointaine',
+    ascensions: 'Ascensions',
+    prestiges: 'Prestiges',
+    continuer: 'Retourner voir l’or tomber',
+  },
+
+  stockagePlein: {
+    message:
+      'Ta progression n’est plus sauvegardée : le navigateur refuse d’en stocker davantage. Exporte ta sauvegarde pour ne rien perdre.',
+  },
+
+  // Durées affichées (encart hors-ligne, écran de fin) : les nombres arrivent déjà arrondis.
+  duree: {
+    minutes: (minutes: number) => `${minutes} min`,
+    heures: (heures: number) => `${heures} h`,
+    heuresMinutes: (heures: number, minutes: number) => `${heures} h ${minutes} min`,
   },
 
   commun: {

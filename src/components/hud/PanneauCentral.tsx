@@ -8,13 +8,22 @@ import { BarreSorts } from './BarreSorts.tsx'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
+import { indexRegion, regionParIndex } from '../../state/contenu.ts'
 
 export function PanneauCentral({ store }: { readonly store: StoreJeuApi }) {
   const clic = useStoreJeu(store, (s) => s.actions.clic)
   const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
+  // Primitive : ne re-rend qu'au passage d'une région à l'autre, jamais au tick.
+  const region = regionParIndex(useStoreJeu(store, (s) => indexRegion(s.etat.combat.zone)))
 
   return (
     <section aria-label={TEXTES_UI.combat.titre} className="flex flex-col gap-2 p-2">
+      <div className="px-1">
+        <p className="text-sm font-semibold text-[var(--couleur-charbon-texte)]" data-testid="nom-region">
+          {region.nom}
+        </p>
+        <p className="text-xs text-[var(--couleur-charbon-texte-attenue)]">{region.ambiance}</p>
+      </div>
       <CanvasCombat store={store} />
       <button
         type="button"

@@ -3,6 +3,7 @@
 
 import { coutPalier } from '../../domain/ameliorations/index.ts'
 import { formater } from '../../domain/notation.ts'
+import { TEXTES_AMELIORATIONS } from '../../donnees/ameliorations.ts'
 import { CONSTANTES } from '../../donnees/constantes.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
@@ -20,16 +21,18 @@ function CarteAmelioration({ store, id }: { readonly store: StoreJeuApi; readonl
   const auMax = parametres.paliersMax !== null && palier >= parametres.paliersMax
   const cout = auMax ? null : coutPalier(palier, parametres)
   const peutAcheter = !auMax && cout !== null && cout <= or
-  const nom = TEXTES_UI.ameliorations.noms[id as keyof typeof TEXTES_UI.ameliorations.noms] ?? id
+  const texte = (TEXTES_AMELIORATIONS as Readonly<Record<string, { nom: string; description: string }>>)[id]
+  if (texte === undefined) return null
 
   return (
     <li className="flex flex-col gap-1 rounded-md bg-[var(--couleur-charbon-900)] px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-[var(--couleur-charbon-texte)]">{nom}</span>
+        <span className="font-medium text-[var(--couleur-charbon-texte)]">{texte.nom}</span>
         <span className="text-xs text-[var(--couleur-charbon-texte-attenue)]">
           {TEXTES_UI.ameliorations.palier(palier)}
         </span>
       </div>
+      <p className="text-xs text-[var(--couleur-charbon-texte-attenue)]">{texte.description}</p>
       <button
         type="button"
         className="min-h-6 min-w-24 rounded bg-[var(--couleur-charbon-800)] px-3 py-1.5 text-sm font-medium text-[var(--couleur-charbon-texte)] enabled:hover:bg-[var(--couleur-charbon-700)] disabled:cursor-not-allowed disabled:opacity-40"

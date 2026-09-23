@@ -22,6 +22,7 @@ import { SORTS } from '../donnees/sorts.ts'
 import { TEXTES_UI } from '../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../state/store.ts'
 import { useStoreJeu } from '../state/hooks.ts'
+import { nomCibleCourante } from '../state/contenu.ts'
 import { demanderEffets, extraireInstantane } from './deltas.ts'
 import type { InstantaneCombat, SortParEcole } from './deltas.ts'
 import { dessinerScene } from './dessin.ts'
@@ -45,27 +46,37 @@ function MiroirCombat({ store }: { readonly store: StoreJeuApi }) {
   const cible = useStoreJeu(store, (s) => s.etat.combat.cible)
   const timerBossRestantMs = useStoreJeu(store, (s) => s.etat.combat.timerBossRestantMs)
   const monstresTues = useStoreJeu(store, (s) => s.etat.magicien.monstresTues)
+  // Vague 3 — nom de contenu (région, vague, boss/gardien/boss final), jamais le `nom` de l'état :
+  // le moteur le laisse vide et une sauvegarde importée pourrait y mettre n'importe quoi.
+  const nom = useStoreJeu(store, (s) => nomCibleCourante(s.etat))
   const boss = estBoss(cible)
 
   const [annonce, setAnnonce] = useState('')
   const precedentMonstresTuesRef = useRef(monstresTues)
   const precedentBossRef = useRef(boss)
+  // Le monstre vaincu est celui qui était affiché **avant** ce rendu : au moment où `monstresTues`
+  // augmente, la cible est déjà la suivante.
+  const nomPrecedentRef = useRef(nom)
 
   useEffect(() => {
     if (monstresTues > precedentMonstresTuesRef.current) {
-      setAnnonce(TEXTES_UI.combat.monstreVaincu(cible?.nom ?? ''))
+      setAnnonce(TEXTES_UI.combat.monstreVaincu(nomPrecedentRef.current))
     }
     precedentMonstresTuesRef.current = monstresTues
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monstresTues])
 
   useEffect(() => {
     if (boss && !precedentBossRef.current) {
-      setAnnonce(TEXTES_UI.combat.bossEnApproche(cible?.nom ?? ''))
+      setAnnonce(TEXTES_UI.combat.bossEnApproche(nom))
     }
     precedentBossRef.current = boss
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boss])
+
+  // Déclaré en dernier : les deux effets ci-dessus lisent encore le nom du rendu précédent.
+  useEffect(() => {
+    nomPrecedentRef.current = nom
+  }, [nom])
 
   // Fond opaque derrière le texte (plutôt qu'une simple ombre portée) : le contenu réel derrière ce
   // miroir est un `<canvas>` dessiné, dont axe-core ne peut jamais garantir la couleur de fond au moment
@@ -75,7 +86,12 @@ function MiroirCombat({ store }: { readonly store: StoreJeuApi }) {
     'rounded bg-[var(--couleur-charbon-900)] px-1.5 py-0.5 text-[var(--couleur-charbon-texte)]'
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 p-2 text-xs font-medium">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 p-2 text-xs font-medium">
+      {nom !== '' && (
+        <span data-testid="nom-cible" className={badge}>
+          {nom}
+        </span>
+      )}
       <span data-testid="pv-cible" className={badge}>
         {cible === null
           ? TEXTES_UI.combat.aucuneCible
