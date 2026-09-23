@@ -17,6 +17,7 @@ import type { StoreJeuApi } from '../../state/store.ts'
 import { BandeauHaut } from './BandeauHaut.tsx'
 import { BandeauLectureSeule } from './BandeauLectureSeule.tsx'
 import { EncartHorsLigne } from './EncartHorsLigne.tsx'
+import { EncartNarration } from './EncartNarration.tsx'
 import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
@@ -116,6 +117,7 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
         <BandeauHaut store={store} />
         <BandeauLectureSeule store={store} />
         <EncartHorsLigne store={store} />
+        <EncartNarration store={store} />
         {/* T-22, règle axe `region` : tout le contenu visible doit vivre dans un point de repère. Le
             bandeau haut est déjà un `<header>` ; le reste (bannières de statut + les deux dispositions,
             desktop caché en CSS + mobile visible) va dans ce `<main>` unique. */}

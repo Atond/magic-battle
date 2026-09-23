@@ -161,6 +161,12 @@ export interface EtatStoreJeu {
   readonly resumeHorsLigne: ResumeHorsLigne | null
   /** EXG-29/EXG-50 — dernière lecture de `prefers-reduced-motion` via le port `matchMedia`. */
   readonly reduitMouvement: boolean
+  /**
+   * T-27 — la partie en cours vient de naître dans cet onglet (aucune sauvegarde au démarrage, ou
+   * « nouvelle partie » confirmée) : l'encart d'intro s'affiche. Jamais persisté : au rechargement, la
+   * sauvegarde existe déjà, l'intro ne revient pas.
+   */
+  readonly partieNeuve: boolean
   readonly actions: ActionsStoreJeu
 }
 
@@ -277,6 +283,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
       reduitMouvement,
+      partieNeuve: false,
       actions: {
         clic: () => jouer((etat) => appliquerClic(etat, CONSTANTES)),
         lancerSort: (idSort) => jouer((etat) => lancerSort(etat, idSort, CONSTANTES).etat),
@@ -524,6 +531,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: motif,
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
+      partieNeuve: false,
     })
     armerBattement()
   }
@@ -568,6 +576,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     // 2. `importerTexte(principal)` — relecture du texte d'`exporterTexte`, **sans** exécuter son plan.
     const base = etatInitialFn(maintenantMs)
     const texte = stockage.lire(CLE_PRINCIPALE)
+    const partieNeuve = texte === null
     let etat = base
     if (texte !== null) {
       const resultat = importerTexte(texte, base, CONSTANTES)
@@ -602,6 +611,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: null,
       resumeHorsLigne: credite.resume,
+      partieNeuve,
     })
 
     // 5. boucle — pilotée par `portPlanificateur`, jamais par un minuteur global.
@@ -627,6 +637,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: { motif: erreur.motif, message: erreur.message, secoursRestaurable },
       resumeHorsLigne: null,
+      partieNeuve: false,
     })
     armerBattement()
   }
@@ -636,7 +647,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
    * `derniereSauvegardeMs = maintenant` en mémoire comme dans le principal réécrit : aucun crédit
    * hors-ligne, ni tout de suite ni au prochain démarrage (N10).
    */
-  function reprendreSur(etat: EtatJeu, maintenantMs: number): void {
+  function reprendreSur(etat: EtatJeu, maintenantMs: number, partieNeuve = false): void {
     const repris: EtatJeu = { ...etat, derniereSauvegardeMs: maintenantMs }
     stockage.ecrire(CLE_PRINCIPALE, exporterTexte(repris, maintenantMs))
     mode = 'actif'
@@ -650,6 +661,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
+      partieNeuve,
     })
     lancerBoucle()
     armerAutoSauvegarde()
@@ -703,7 +715,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     if (!peutEcrireSauvegarde(maintenant)) return { ok: false, motif: 'sansDroit' }
     const neuf = etatInitialFn(maintenant)
     executerPlan(planifierImport(contenuCourant(maintenant), exporterTexte(neuf, maintenant), 'nouvellePartie'))
-    reprendreSur(neuf, maintenant)
+    reprendreSur(neuf, maintenant, true)
     return { ok: true }
   }
 
