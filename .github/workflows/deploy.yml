@@ -40,6 +40,22 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # ADR-20 : les tests de tests/ui/ tournent dans Chromium, sans chemin de saut. Le binaire est mis en
+      # cache par version de Playwright ; ses bibliothèques système viennent d'apt et ne se cachent pas.
+      - name: Version de Playwright (clé de cache)
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: cache-pw
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Chromium (binaire si cache vide, dépendances système toujours)
+        run: |
+          if [ "${{ steps.cache-pw.outputs.cache-hit }}" != 'true' ]; then
+            npx playwright install chromium
+          fi
+          npx playwright install-deps chromium
       # --strict : en CI, une étape « ignorée » est un échec. La tolérance par défaut de verify.sh sert
       # au travail local ; ici, un node_modules absent ou un script npm disparu du package.json doit
       # rougir au lieu de produire un vert trompeur. Branché depuis T-16, les 7 étapes existant toutes.

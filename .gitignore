@@ -7,3 +7,6 @@ dist/
 .claude/settings.local.json
 .serena/cache/
 .claude/.headroom_wrap_marker.json
+
+# Pièces jointes des tests navigateur (Vitest browser mode)
+.vitest/
