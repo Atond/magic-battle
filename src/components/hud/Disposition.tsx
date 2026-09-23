@@ -24,6 +24,7 @@ import { PanneauCentral } from './PanneauCentral.tsx'
 import { PanneauEcoles } from './PanneauEcoles.tsx'
 import { PanneauEquipement } from './PanneauEquipement.tsx'
 import { PanneauPrestige } from './PanneauPrestige.tsx'
+import { useUneModaleEstOuverte } from './modaleOuverteGlobale.ts'
 
 type OngletMobile = 'ecoles' | 'ameliorations' | 'prestige'
 
@@ -95,13 +96,28 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
   // parallèle (desktop caché + mobile visible), voir le commentaire de `useRaccourcisSorts`.
   useRaccourcisSorts(store)
 
+  // Tant qu'une modale est ouverte (prestige, Ascension…), le reste de l'appli est réellement retiré du
+  // flux (`display:none`, pas seulement `aria-hidden`) — `modaleOuverteGlobale.ts` documente pourquoi :
+  // du contenu de fond en flux normal, simplement couvert visuellement par le voile `position: fixed` de
+  // la modale (portée hors de cet arbre via `createPortal`), peut sinon se retrouver aux mêmes
+  // coordonnées écran qu'elle, ambigu pour un lecteur d'écran en mode « parcourir » comme pour un audit
+  // géométrique automatisé.
+  const modaleOuverte = useUneModaleEstOuverte()
+
   return (
     <div className="min-h-screen bg-[var(--couleur-charbon-950)]">
-      <BandeauHaut store={store} />
-      <BandeauLectureSeule store={store} />
-      <EncartHorsLigne store={store} />
-      <DispositionDesktop store={store} />
-      <DispositionMobile store={store} />
+      <div className={modaleOuverte ? 'hidden' : undefined} aria-hidden={modaleOuverte || undefined}>
+        <BandeauHaut store={store} />
+        <BandeauLectureSeule store={store} />
+        <EncartHorsLigne store={store} />
+        {/* T-22, règle axe `region` : tout le contenu visible doit vivre dans un point de repère. Le
+            bandeau haut est déjà un `<header>` ; le reste (bannières de statut + les deux dispositions,
+            desktop caché en CSS + mobile visible) va dans ce `<main>` unique. */}
+        <main>
+          <DispositionDesktop store={store} />
+          <DispositionMobile store={store} />
+        </main>
+      </div>
     </div>
   )
 }

@@ -28,15 +28,19 @@ export function EcranSauvegardeIllisible({
   const restaurerSecours = useStoreJeu(store, (s) => s.actions.restaurerSecours)
 
   return (
+    // `role="alert"` n'est pas un rôle autorisé sur `<main>` (échec axe `aria-allowed-role`, T-22) : le
+    // point de repère reste `<main>` (rôle implicite), l'alerte porte seulement sur le titre + le message,
+    // dans un `<div role="alert">` imbriqué — c'est ce que les technologies d'assistance annoncent.
     <main
-      role="alert"
       aria-labelledby="titre-ecran-illisible"
       className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--couleur-charbon-950)] p-6 text-center text-[var(--couleur-charbon-texte)]"
     >
-      <h1 id="titre-ecran-illisible" className="text-lg font-semibold">
-        {TEXTES_UI.illisible.titre}
-      </h1>
-      <p className="max-w-md text-sm text-[var(--couleur-charbon-texte-attenue)]">{TEXTES_UI.illisible.message}</p>
+      <div role="alert" className="flex flex-col items-center gap-4">
+        <h1 id="titre-ecran-illisible" className="text-lg font-semibold">
+          {TEXTES_UI.illisible.titre}
+        </h1>
+        <p className="max-w-md text-sm text-[var(--couleur-charbon-texte-attenue)]">{TEXTES_UI.illisible.message}</p>
+      </div>
       <details className="max-w-md text-xs text-[var(--couleur-charbon-texte-attenue)]">
         <summary className="cursor-pointer">{TEXTES_UI.illisible.detailLabel}</summary>
         <p className="mt-1 break-words">{illisible.message}</p>

@@ -5,9 +5,16 @@
 // `[aria-modal="true"]` — le mécanisme qui coupe déjà les raccourcis 1-6 (`BarreSorts.tsx`,
 // `uneModaleEstOuverte`) s'appuie sur cet attribut : poser une modale hors de ce composant la
 // contournerait silencieusement.
+//
+// Portée hors de l'arbre du panneau qui l'ouvre (`createPortal` vers `document.body`) et signale son
+// ouverture via `modaleOuverteGlobale.ts` : `Disposition.tsx` masque alors le reste de l'appli
+// (`display:none`) tant qu'une modale est ouverte, voir ce module pour le pourquoi.
 
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import type { ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
+
+import { signalerModaleOuverte } from './modaleOuverteGlobale.ts'
 
 const SELECTEUR_FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -64,9 +71,15 @@ export function Modale({ id, titre, ouverte, onFermer, annulerRef, cleEtape, chi
     return () => document.removeEventListener('keydown', surTouche)
   }, [ouverte, onFermer])
 
+  // Signale au registre global tant que cette modale est ouverte (`Disposition.tsx` masque le reste).
+  useEffect(() => {
+    if (!ouverte) return
+    return signalerModaleOuverte()
+  }, [ouverte])
+
   if (!ouverte) return null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={(evenement) => {
@@ -83,8 +96,15 @@ export function Modale({ id, titre, ouverte, onFermer, annulerRef, cleEtape, chi
         <h2 id={id} className="text-base font-semibold text-[var(--couleur-charbon-texte)]">
           {titre}
         </h2>
-        {children}
+        {/* `key={cleEtape}` force un sous-arbre DOM neuf à chaque étape plutôt qu'une réutilisation en
+            place (React réconcilie par type+position) : sans ça, un lecteur d'écran ne re-décrirait pas
+            toujours le changement de contenu, et un outil d'audit qui interroge le DOM juste après une
+            transition peut lire un nœud encore associé à l'ancienne étape le temps d'un battement.
+            `Fragment` plutôt qu'un `<div>` : pas de nœud DOM supplémentaire (un wrapper en
+            `display: contents` perturbe le calcul de recouvrement d'axe-core, cf. `aide-audit.ts`). */}
+        <Fragment key={cleEtape}>{children}</Fragment>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

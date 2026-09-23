@@ -82,7 +82,11 @@ function CarteSort({ store, idSort }: { readonly store: StoreJeuApi; readonly id
       <li
         data-testid={`sort-${touche}`}
         aria-label={`${TEXTES_UI.sorts.verrouille} — ${TEXTES_UI.sorts.touche(touche)}`}
-        className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-[var(--couleur-charbon-bordure)] bg-[var(--couleur-charbon-900)] px-2 py-1 text-center opacity-70"
+        // Pas d'`opacity-*` sur ce conteneur (T-22, EXG-31) : diluer un texte déjà proche du seuil AA
+        // vers le fond de page réel (composite alpha, pas le fond de carte affiché) le fait passer sous
+        // 4,5:1 — la distinction « verrouillé » passe par la bordure en pointillés, le cadenas et le
+        // libellé, jamais par une transparence qui affaiblirait le texte.
+        className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-[var(--couleur-charbon-bordure)] bg-[var(--couleur-charbon-900)] px-2 py-1 text-center"
       >
         <span aria-hidden="true" className="text-base">
           🔒

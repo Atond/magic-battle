@@ -26,7 +26,8 @@ function CarteEcole({ store, id }: { readonly store: StoreJeuApi; readonly id: I
   if (!revelee) {
     return (
       <li
-        className="flex min-h-12 items-center gap-2 rounded-md border border-[var(--couleur-charbon-bordure)] bg-[var(--couleur-charbon-900)] px-3 py-2 opacity-70"
+        // Voir BarreSorts.tsx : pas d'`opacity-*` ici non plus (T-22, EXG-31), même raison.
+        className="flex min-h-12 items-center gap-2 rounded-md border border-[var(--couleur-charbon-bordure)] bg-[var(--couleur-charbon-900)] px-3 py-2"
         aria-label={TEXTES_UI.ecoles.verrouillee}
       >
         <span aria-hidden="true" className="text-base">

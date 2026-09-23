@@ -112,6 +112,7 @@ etape_npm lint               "lint"
 etape_npm test               "test (vitest)"
 etape_npm equilibrage:check  "equilibrage:check (rejoue les constantes archivées, < 10 s)"
 etape_npm equilibrage:empreinte "equilibrage:empreinte (src/donnees/ = sortie du vecteur archivé)"
+etape_npm palette:ratios      "palette:ratios (contraste WCAG des paires de jetons — T-22, EXG-31/32)"
 etape_npm build              "build (vite)"
 
 echo; printf '%s\n' "${lignes[@]}"; echo
