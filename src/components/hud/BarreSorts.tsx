@@ -6,12 +6,12 @@
 // (`src/domain/sorts/index.ts`), le refus (verrouillé, cooldown) est entièrement décidé par
 // `lancerSort` du moteur — la barre ne fait qu'afficher et relayer une touche.
 
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 
 import { etatSortLu } from '../../domain/sorts/index.ts'
 import type { ToucheSort } from '../../domain/types.ts'
 import { CONSTANTES } from '../../donnees/constantes.ts'
-import { SORTS } from '../../donnees/sorts.ts'
+import { SORTS, TEXTES_SORTS } from '../../donnees/sorts.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
@@ -19,9 +19,11 @@ import { useStoreJeu } from '../../state/hooks.ts'
 /** Ordre d'affichage : la touche, du plus petit chiffre au plus grand (§4.3). */
 const SORTS_PAR_TOUCHE = [...SORTS].sort((a, b) => a.touche - b.touche)
 
-/** Nom de travail d'un sort : celui de l'école qui le porte (§5 « une École débloque un Sort »). */
-function nomSort(idEcole: (typeof SORTS)[number]['idEcole']): string {
-  return TEXTES_UI.ecoles.noms[idEcole]
+type TexteSort = { readonly nom: string; readonly description: string }
+
+/** Nom et description d'un sort (T-24), indexés par identifiant du moteur. */
+function texteSort(idSort: string): TexteSort | undefined {
+  return (TEXTES_SORTS as Readonly<Record<string, TexteSort>>)[idSort]
 }
 
 function estDansChampDeSaisie(cible: EventTarget | null): boolean {
@@ -72,9 +74,12 @@ function CarteSort({ store, idSort }: { readonly store: StoreJeuApi; readonly id
   )
   const lancerSort = useStoreJeu(store, (s) => s.actions.lancerSort)
   const lectureSeule = useStoreJeu(store, (s) => s.lectureSeule)
+  // `PanneauCentral` est monté deux fois (desktop + mobile) : un id fixe serait dupliqué dans le DOM.
+  const idDescription = useId()
 
   const parametres = SORTS.find((s) => s.id === idSort)
-  if (parametres === undefined) return null
+  const texte = texteSort(idSort)
+  if (parametres === undefined || texte === undefined) return null
   const { touche, idEcole } = parametres
 
   if (!debloque) {
@@ -107,11 +112,15 @@ function CarteSort({ store, idSort }: { readonly store: StoreJeuApi; readonly id
         data-testid={`sort-${touche}`}
         disabled={enCooldown || lectureSeule}
         onClick={() => lancerSort(idSort)}
-        aria-label={`${nomSort(idEcole)} — ${TEXTES_UI.sorts.touche(touche)}${enCooldown ? ` — ${TEXTES_UI.sorts.enCooldown(cooldownSecondes)}` : ''}`}
+        aria-label={`${texte.nom} — ${TEXTES_UI.sorts.touche(touche)}${enCooldown ? ` — ${TEXTES_UI.sorts.enCooldown(cooldownSecondes)}` : ''}`}
+        aria-describedby={idDescription}
         className="flex min-h-11 w-full min-w-11 flex-col items-center justify-center gap-0.5 rounded-md border-l-4 bg-[var(--couleur-charbon-900)] px-2 py-1 text-center enabled:hover:bg-[var(--couleur-charbon-800)] disabled:cursor-not-allowed disabled:opacity-60"
         style={{ borderLeftColor: `var(--couleur-ecole-${idEcole})` }}
       >
-        <span className="text-xs font-medium text-[var(--couleur-charbon-texte)]">{nomSort(idEcole)}</span>
+        <span className="text-xs leading-tight font-medium text-[var(--couleur-charbon-texte)]">{texte.nom}</span>
+        <span id={idDescription} className="sr-only">
+          {texte.description}
+        </span>
         <span className="text-[10px] leading-tight text-[var(--couleur-charbon-texte-attenue)]">
           {enCooldown ? TEXTES_UI.sorts.enCooldown(cooldownSecondes) : TEXTES_UI.sorts.pret}
         </span>

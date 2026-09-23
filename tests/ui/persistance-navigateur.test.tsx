@@ -122,6 +122,19 @@ describe('transport réel : localStorage + BroadcastChannel (EXG-22, EXG-48, ADR
     expect(() => creerCanalDiffusion('verrou')).toThrow(/magic-battle:/)
   })
 
+  it('quota réellement dépassé dans Chromium : le port lève (le store l’affichera), rien n’est écrit', () => {
+    // Chromium borne `localStorage` à ~5 Mio par origine (UTF-16 : ~10 Mo) : 6 M caractères dépassent
+    // à coup sûr. Avant la vague 3, le port avalait cette erreur et le joueur ne savait rien.
+    const stockage = creerStockageLocal()
+    const cle = `${PREFIXE_STOCKAGE}test-quota`
+    try {
+      expect(() => stockage.ecrire(cle, 'x'.repeat(6_000_000))).toThrow()
+      expect(window.localStorage.getItem(cle)).toBeNull()
+    } finally {
+      window.localStorage.removeItem(cle)
+    }
+  })
+
   it('EXG-27 sur le vrai localStorage : principal tronqué, rien n’est réécrit après auto-sauvegarde et hidden', () => {
     const texte = exporterTexte(etatProductif(T0 - 3_600_000), T0 - 3_600_000)
     const tronque = texte.slice(0, Math.floor(texte.length / 2))

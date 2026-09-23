@@ -43,7 +43,8 @@ import { acheterAmelioration } from '../domain/ameliorations/index.ts'
 import { acheterEquipement } from '../domain/equipement/index.ts'
 import { acheterNoeudArbre } from '../domain/prestige/arbre.ts'
 import { prestiger, sommeBornee } from '../domain/prestige/index.ts'
-import { ascensionner } from '../domain/ascension/index.ts'
+import { acheterNoeudAscension, ascensionner } from '../domain/ascension/index.ts'
+import { entrerZoneFinale } from '../domain/fin/index.ts'
 import type { EtatJeu, IdEcole, ResumeHorsLigne } from '../domain/types.ts'
 import { CONSTANTES } from '../donnees/constantes.ts'
 import {
@@ -99,6 +100,11 @@ export interface ActionsStoreJeu {
   readonly acheterEquipement: (id: string) => void
   /** EXG-39 — achète un rang de l'arbre d'Éclats, même garde. */
   readonly acheterNoeudEclats: (id: string) => void
+  /** EXG-40 — achète un rang de l'arbre d'Ascension (Points d'Ascension), même garde. */
+  readonly acheterNoeudAscension: (id: string) => void
+  /** EXG-28 — entre dans la zone du boss final (`entrerZoneFinale`), même garde. Le seuil
+   *  d'Ascensions et la fin de partie sont tenus par le domaine : un refus laisse l'état intact. */
+  readonly entrerZoneFinale: () => void
   /**
    * EXG-19 / EXG-21 — étape 2 du prestige : applique `prestiger` (`src/domain/prestige/index.ts`). Même
    * garde que `clic` (aucun effet hors mode `actif`, donc pas en lecture seule).
@@ -161,6 +167,17 @@ export interface EtatStoreJeu {
   readonly resumeHorsLigne: ResumeHorsLigne | null
   /** EXG-29/EXG-50 — dernière lecture de `prefers-reduced-motion` via le port `matchMedia`. */
   readonly reduitMouvement: boolean
+  /**
+   * T-27 — la partie en cours vient de naître dans cet onglet (aucune sauvegarde au démarrage, ou
+   * « nouvelle partie » confirmée) : l'encart d'intro s'affiche. Jamais persisté : au rechargement, la
+   * sauvegarde existe déjà, l'intro ne revient pas.
+   */
+  readonly partieNeuve: boolean
+  /**
+   * La dernière écriture de la sauvegarde principale a échoué (quota plein, stockage refusé) : la
+   * progression n'est plus sauvegardée. Repasse à `false` à la première écriture réussie.
+   */
+  readonly stockagePlein: boolean
   readonly actions: ActionsStoreJeu
 }
 
@@ -233,7 +250,7 @@ type Mode = 'confirmation' | 'actif' | 'illisible' | 'secondaire' | 'arrete'
 export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   const {
     horloge,
-    stockage,
+    stockage: stockageBrut,
     canal,
     matchMedia,
     idOnglet,
@@ -254,6 +271,40 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
   // accumulateur, deux frames de 60 ms consécutives sans notification (aucune ne franchit 100 ms toute
   // seule) perdraient 60 ms à chaque fois au lieu de les cumuler jusqu'au tick suivant (EXG-2).
   let accumulNonTraiteMs = 0
+
+  /**
+   * Toute écriture passe par ici : une exception du port (quota dépassé, `QuotaExceededError`, stockage
+   * désactivé) ne fait jamais tomber la boucle, et l'issue d'une écriture de la sauvegarde **principale**
+   * pilote `stockagePlein`. Le verrou et les réglages n'y comptent pas : une petite écriture de verrou
+   * réussie ne dit rien de la place qu'il reste pour la partie. Le `setState` n'a lieu qu'au changement.
+   */
+  const stockage: Stockage = {
+    lire: (cle) => stockageBrut.lire(cle),
+    supprimer: (cle) => {
+      try {
+        stockageBrut.supprimer(cle)
+      } catch {
+        // Rien à signaler : une suppression ratée ne perd aucune progression.
+      }
+    },
+    ecrire: (cle, valeur) => {
+      // ADR-21 — une clé hors de l'espace `magic-battle:` est une faute de programmation : elle doit
+      // rester bruyante, pas être avalée comme un quota plein par le `catch` ci-dessous.
+      if (!cle.startsWith(PREFIXE_STOCKAGE)) {
+        throw new Error(`Clé de stockage hors de l'espace « ${PREFIXE_STOCKAGE} » : ${cle}`)
+      }
+      let reussie = true
+      try {
+        stockageBrut.ecrire(cle, valeur)
+      } catch {
+        reussie = false
+      }
+      if (cle !== CLE_PRINCIPALE) return
+      // Pendant la construction du store (`demarrer()` n'a encore rien écrit) `store` existe déjà :
+      // l'écriture principale n'a lieu qu'après la confirmation du verrou.
+      if (store.getState().stockagePlein === reussie) store.setState({ stockagePlein: !reussie })
+    },
+  }
 
   let reduitMouvement = false
   try {
@@ -277,6 +328,8 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
       reduitMouvement,
+      partieNeuve: false,
+      stockagePlein: false,
       actions: {
         clic: () => jouer((etat) => appliquerClic(etat, CONSTANTES)),
         lancerSort: (idSort) => jouer((etat) => lancerSort(etat, idSort, CONSTANTES).etat),
@@ -284,6 +337,8 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
         acheterAmelioration: (id) => jouer((etat) => acheterAmelioration(etat, id, CONSTANTES).etat),
         acheterEquipement: (id) => jouer((etat) => acheterEquipement(etat, id, CONSTANTES).etat),
         acheterNoeudEclats: (id) => jouer((etat) => acheterNoeudArbre(etat, id, 1, 'eclats', CONSTANTES).etat),
+        acheterNoeudAscension: (id) => jouer((etat) => acheterNoeudAscension(etat, id, 1, CONSTANTES).etat),
+        entrerZoneFinale: () => jouer((etat) => entrerZoneFinale(etat, CONSTANTES).etat),
         prestige: (gainFige) =>
           jouer((etat) => {
             const resultat = prestiger(etat, CONSTANTES)
@@ -524,6 +579,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: motif,
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
+      partieNeuve: false,
     })
     armerBattement()
   }
@@ -568,6 +624,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     // 2. `importerTexte(principal)` — relecture du texte d'`exporterTexte`, **sans** exécuter son plan.
     const base = etatInitialFn(maintenantMs)
     const texte = stockage.lire(CLE_PRINCIPALE)
+    const partieNeuve = texte === null
     let etat = base
     if (texte !== null) {
       const resultat = importerTexte(texte, base, CONSTANTES)
@@ -602,6 +659,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: null,
       resumeHorsLigne: credite.resume,
+      partieNeuve,
     })
 
     // 5. boucle — pilotée par `portPlanificateur`, jamais par un minuteur global.
@@ -627,6 +685,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: { motif: erreur.motif, message: erreur.message, secoursRestaurable },
       resumeHorsLigne: null,
+      partieNeuve: false,
     })
     armerBattement()
   }
@@ -636,7 +695,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
    * `derniereSauvegardeMs = maintenant` en mémoire comme dans le principal réécrit : aucun crédit
    * hors-ligne, ni tout de suite ni au prochain démarrage (N10).
    */
-  function reprendreSur(etat: EtatJeu, maintenantMs: number): void {
+  function reprendreSur(etat: EtatJeu, maintenantMs: number, partieNeuve = false): void {
     const repris: EtatJeu = { ...etat, derniereSauvegardeMs: maintenantMs }
     stockage.ecrire(CLE_PRINCIPALE, exporterTexte(repris, maintenantMs))
     mode = 'actif'
@@ -650,6 +709,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
       motifLectureSeule: null,
       sauvegardeIllisible: null,
       resumeHorsLigne: null,
+      partieNeuve,
     })
     lancerBoucle()
     armerAutoSauvegarde()
@@ -703,7 +763,7 @@ export function creerStoreJeu(options: OptionsStoreJeu): StoreJeuApi {
     if (!peutEcrireSauvegarde(maintenant)) return { ok: false, motif: 'sansDroit' }
     const neuf = etatInitialFn(maintenant)
     executerPlan(planifierImport(contenuCourant(maintenant), exporterTexte(neuf, maintenant), 'nouvellePartie'))
-    reprendreSur(neuf, maintenant)
+    reprendreSur(neuf, maintenant, true)
     return { ok: true }
   }
 

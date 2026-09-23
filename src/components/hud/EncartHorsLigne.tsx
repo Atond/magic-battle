@@ -16,16 +16,8 @@ import { CONSTANTES } from '../../donnees/constantes.ts'
 import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import { seuilRattrapageMs } from '../../state/constantes.ts'
 import { useStoreJeu } from '../../state/hooks.ts'
+import { formaterDuree } from '../../state/presentation.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
-
-/** Présentation seulement (pas une formule de jeu) : minutes sous l'heure, heures + minutes au-delà. */
-function formaterDuree(ms: number): string {
-  const minutesTotales = Math.round(ms / 60_000)
-  if (minutesTotales < 60) return `${Math.max(minutesTotales, 1)} min`
-  const heures = Math.floor(minutesTotales / 60)
-  const minutes = minutesTotales % 60
-  return minutes === 0 ? `${heures} h` : `${heures} h ${minutes} min`
-}
 
 export function EncartHorsLigne({ store }: { readonly store: StoreJeuApi }) {
   const resume = useStoreJeu(store, (s) => s.resumeHorsLigne)

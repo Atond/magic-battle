@@ -18,6 +18,7 @@ import {
 import { multAmeliorations, multEquipement, multiplicateursAchats } from './ameliorations/index.ts'
 import { multArbreAscension } from './ascension/index.ts'
 import { productionEcoles, revelerEcolesDeZone } from './ecoles/index.ts'
+import { avancerBossFinal } from './fin/index.ts'
 import {
   bonusPassifEclats,
   facteurCooldownArbres,
@@ -131,6 +132,17 @@ function orDesDegats(etat: EtatJeu, degats: number, constantes: Constantes): num
   return orPourDegats(degats, etat.combat.zone, constantes) * multOrArbres(etat, constantes)
 }
 
+/**
+ * EXG-6 / EXG-28 — or réellement versé pour des dégâts portés **dans la boucle** (tick, clic, sort).
+ * Tant que le boss final est engagé, tous les dégâts vont à lui ; or il ne rapporte rien
+ * (`orAuMeurtre = 0`, zone dédiée hors de l'échelle d'or) : ses dégâts non plus. Convertir au taux de la
+ * zone ordinaire reviendrait à payer le joueur pour des monstres qu'il ne combat pas.
+ * `calculHorsLigne` n'y passe pas : le hors-ligne reste la production passive d'EXG-4/EXG-5.
+ */
+function orVerse(etat: EtatJeu, degats: number, constantes: Constantes): number {
+  return etat.bossFinal === undefined ? orDesDegats(etat, degats, constantes) : 0
+}
+
 /* ──────────────────────────────────────────────────────────────── tick & delta-time */
 
 /** Convertit un nombre de ticks en secondes de simulation. */
@@ -143,7 +155,7 @@ function crediterProduction(etat: EtatJeu, nbTicks: number, constantes: Constant
   const degats = degatsParSeconde(etat, constantes) * secondesPourTicks(nbTicks)
   // EXG-6 agrégé : l'or suit les dégâts infligés, au multiplicateur de la zone courante près
   // (`mult_or_zone(1) = 1`, donc la zone de départ ne change rien) et aux nœuds d'or près (EXG-39).
-  const or = orDesDegats(etat, degats, constantes)
+  const or = orVerse(etat, degats, constantes)
   return {
     ...etat,
     bourse: { ...etat.bourse, or: etat.bourse.or + or },
@@ -206,9 +218,32 @@ function crediterDegatsInstantanes(etat: EtatJeu, degats: number, constantes: Co
   if (!Number.isFinite(degats) || degats <= 0) return etat
   return {
     ...etat,
-    bourse: { ...etat.bourse, or: etat.bourse.or + orDesDegats(etat, degats, constantes) },
+    bourse: { ...etat.bourse, or: etat.bourse.or + orVerse(etat, degats, constantes) },
     magicien: { ...etat.magicien, degatsCumules: etat.magicien.degatsCumules + degats },
   }
+}
+
+/**
+ * EXG-16 / EXG-28 — aiguillage d'un pas de combat : tant que `entrerZoneFinale` a engagé le boss final,
+ * **tous** les dégâts du pas (production passive de la chaîne complète §8 + clic + sorts) et tout le
+ * temps écoulé vont à lui, et le combat ordinaire est gelé (ni vague, ni zone, ni monstre tué). Sinon,
+ * combat ordinaire. La règle du combat final n'est pas réécrite ici : c'est `fin/avancerBossFinal`
+ * (victoire → `partieTerminee` + statistiques figées ; chrono écoulé → combat refermé, rien d'autre ne
+ * bouge), le moteur ne fait que lui fournir le même budget de dégâts qu'au combat ordinaire.
+ */
+function avancerCombatDuPas(
+  etat: EtatJeu,
+  dtMs: number,
+  constantes: Constantes,
+  degatsInstantanes: number,
+): EtatJeu {
+  if (etat.bossFinal === undefined) return avancerCombatJeu(etat, dtMs, constantes, degatsInstantanes).etat
+
+  const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0
+  const instantanes = Number.isFinite(degatsInstantanes) && degatsInstantanes > 0 ? degatsInstantanes : 0
+  const degats = degatsParSeconde(etat, constantes) * (dt / MS_PAR_SECONDE) + instantanes
+  const pas = avancerBossFinal(etat, degats, dt, constantes)
+  return { ...pas.etat, iterationsCombat: pas.etat.iterationsCombat + pas.iterations }
 }
 
 /**
@@ -223,7 +258,7 @@ export function appliquerClic(etat: EtatJeu, constantes: Constantes): EtatJeu {
     magicien: { ...etat.magicien, clicsCumules: etat.magicien.clicsCumules + 1 },
   }
   const credite = crediterDegatsInstantanes(compte, degats, constantes)
-  return avancerCombatJeu(credite, 0, constantes, degats).etat
+  return avancerCombatDuPas(credite, 0, constantes, degats)
 }
 
 /**
@@ -236,7 +271,7 @@ export function lancerSort(etat: EtatJeu, idSort: string, constantes: Constantes
   if (!tir.declenche) return tir
 
   const credite = crediterDegatsInstantanes(tir.etat, tir.degats, constantes)
-  return { ...tir, etat: avancerCombatJeu(credite, 0, constantes, tir.degats).etat }
+  return { ...tir, etat: avancerCombatDuPas(credite, 0, constantes, tir.degats) }
 }
 
 /**
@@ -252,8 +287,8 @@ export function tick(etat: EtatJeu, constantes: Constantes): EtatJeu {
   const dtCooldownMs = PAS_TICK_MS / facteurCooldownArbres(etat, constantes)
   const sorts = avancerSorts(production, dtCooldownMs, constantes, multiplicateursAchats(etat, constantes))
   const apresSorts = crediterDegatsInstantanes(sorts.etat, sorts.degats, constantes)
-  const combat = avancerCombatJeu(apresSorts, PAS_TICK_MS, constantes, sorts.degats)
-  const quetes = evaluerQuetes(combat.etat, constantes)
+  const combat = avancerCombatDuPas(apresSorts, PAS_TICK_MS, constantes, sorts.degats)
+  const quetes = evaluerQuetes(combat, constantes)
   return { ...quetes.etat, ticksRattrapes: quetes.etat.ticksRattrapes + 1 }
 }
 
@@ -261,6 +296,32 @@ export function tick(etat: EtatJeu, constantes: Constantes): EtatJeu {
 function seuilRattrapage(constantes: Constantes): number {
   const seuil = constantes.tick.nTicksMax
   return Number.isFinite(seuil) && seuil > 0 ? Math.floor(seuil) : 0
+}
+
+/**
+ * EXG-3 / EXG-16 — avant toute forme fermée, un combat final engagé est **joué tick par tick** jusqu'à
+ * son issue. La forme fermée crédite une production linéaire aveugle au combat : elle ne saurait ni
+ * décompter le chrono, ni savoir *quand* le boss tombe (l'instant fige `statistiquesFin.dureeTotaleMs`),
+ * ni compter l'auto-cast qui peut seul décider de la victoire. Jouer ces ticks donne, par construction,
+ * la même issue que la même durée en petits pas.
+ *
+ * Coût borné par une constante (EXG-30) : le chrono décroît de `PAS_TICK_MS` à chaque tick et
+ * `avancerBossFinal` referme le combat quand il atteint zéro, donc au plus `timerBossFinalMs / PAS_TICK_MS`
+ * ticks — jamais proportionnel à l'absence. `tests/domain/boss-final-boucle.test.ts` vérifie que ce
+ * nombre reste sous `nTicksMax`, le budget d'itérations par appel d'EXG-3.
+ */
+function resoudreCombatFinal(
+  etat: EtatJeu,
+  nbTicksMax: number,
+  constantes: Constantes,
+): { etat: EtatJeu; ticksJoues: number } {
+  let courant = etat
+  let ticksJoues = 0
+  while (courant.bossFinal !== undefined && ticksJoues < nbTicksMax) {
+    courant = tick(courant, constantes)
+    ticksJoues += 1
+  }
+  return { etat: courant, ticksJoues }
 }
 
 /**
@@ -281,7 +342,10 @@ export function appliquerDelta(etat: EtatJeu, dtMs: number, constantes: Constant
   if (nbTicks <= 0) return { ...etat, resteDeltaMs }
 
   if (nbTicks > seuilRattrapage(constantes)) {
-    return { ...crediterProduction(etat, nbTicks, constantes), resteDeltaMs }
+    const combatFinal = resoudreCombatFinal(etat, nbTicks, constantes)
+    const restants = nbTicks - combatFinal.ticksJoues
+    const ferme = restants > 0 ? crediterProduction(combatFinal.etat, restants, constantes) : combatFinal.etat
+    return { ...ferme, resteDeltaMs }
   }
 
   let courant = etat

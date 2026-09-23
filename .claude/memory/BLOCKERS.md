@@ -66,3 +66,13 @@
 - **Résolution :** l'utilisateur a lancé `sudo npx playwright install-deps chromium` dans un terminal à
   part (`! sudo …` échoue dans Claude Code : pas de terminal pour saisir le mot de passe). `verify.sh` vert,
   test navigateur vu rouge sur une cible injectée à 40 px. En CI, même commande sur le runner. → [[LRN-007]]
+
+## BLK-006 — un `.bak` refusé par le stockage n'empêche pas l'écrasement de la sauvegarde — Ouvert, à fermer avant T-28 (2026-09-23)
+- **Contexte :** revue de fin de vague 3. `store.ts` (enveloppe de stockage, ~l. 297-302 et `executerPlan`
+  ~l. 486-491) : si l'écriture de `magic-battle:sauvegarde.bak` échoue (quota presque plein — le `.bak` réclame
+  une clé entière de plus), l'erreur est avalée et la sauvegarde principale est écrasée quand même. Invariant 3
+  (« `.bak` avant écrasement ») non tenu. Pas une régression : le port avalait déjà l'erreur avant `78a5451`.
+- **Pourquoi pas bloquant aujourd'hui :** aucun chemin joueur n'y mène — l'import n'a pas d'UI (T-28), et
+  `nouvellePartie` n'est offert que sur l'écran « illisible », où il n'y a pas de contenu courant à sauvegarder.
+- **À faire (T-28) :** test d'état où `ecrire('magic-battle:sauvegarde.bak')` lève → la principale reste intacte
+  et le joueur est prévenu ; puis corriger `executerPlan`. Candidat skill `ecriture-bak-atomique`.

@@ -17,7 +17,9 @@
 //     frame ;
 //  6. dimensionnement du canvas à son conteneur × `devicePixelRatio` ;
 //  7. l'interrupteur de performance est accessible (rôle, focus clavier) et 0 violation axe-core sur le
-//     panneau complet.
+//     panneau complet ;
+//  8. EXG-28 — pendant le combat final (`EtatJeu.bossFinal`, hors d'`EtatCombat`), le canvas dessine le
+//     boss final et sa barre de PV, même quand la cible de progression est vide.
 
 import { describe, expect, it, vi } from 'vitest'
 import { userEvent } from 'vitest/browser'
@@ -29,6 +31,8 @@ import '../../src/index.css'
 
 import { etatInitial } from '../../src/domain/moteur.ts'
 import type { Boss, EtatJeu, Monstre } from '../../src/domain/types.ts'
+import { pvBossFinal } from '../../src/domain/zones/index.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { CanvasCombat } from '../../src/canvas/CanvasCombat.tsx'
 import { CLE_REGLAGES } from '../../src/canvas/reglages.ts'
 import { creerStoreJeu } from '../../src/state/store.ts'
@@ -228,6 +232,36 @@ describe('EXG-32 — miroir DOM des PV de la cible et du timer de boss', () => {
 
     unmount()
     store.arreter()
+  })
+})
+
+describe('EXG-28 — le canvas dessine le boss final pendant son combat', () => {
+  it('cible de progression vide, boss final à mi-PV : la barre pleine fait la moitié de son fond', async () => {
+    const pvMax = pvBossFinal(CONSTANTES)
+    const store = creerStoreDeTest({
+      etatInitialFn: (horodatageMs) => {
+        const base = etatInitial(horodatageMs)
+        return {
+          ...base,
+          combat: { ...base.combat, cible: null, timerBossRestantMs: null },
+          bossFinal: { pvCourants: pvMax / 2, timerRestantMs: 10_000 },
+        }
+      },
+    })
+    const { getByTestId, unmount } = render(<CanvasCombat store={store} />)
+    try {
+      const ctx = (getByTestId('canvas-combat') as HTMLCanvasElement).getContext('2d')!
+      const espion = vi.spyOn(ctx, 'fillRect')
+      await attendreFrames(3)
+      // Barre de PV = les deux seuls rectangles de 6 px de haut (fond puis plein, `dessin.ts`).
+      const barres = espion.mock.calls.filter((appel) => appel[3] === 6).slice(-2)
+      expect(barres, 'barre de PV du boss final dessinée').toHaveLength(2)
+      const [fond, plein] = barres
+      expect(plein![2] / fond![2]).toBeCloseTo(0.5, 9)
+    } finally {
+      unmount()
+      store.arreter()
+    }
   })
 })
 

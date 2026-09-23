@@ -40,6 +40,22 @@
   supprimés ; écart de compteur de `MAX_SAFE_INTEGER` borné avant allocation). Le temps de frame est exposé
   en `data-dernier-frame-ms` sur le canvas mais **n'a pas encore été relevé** sur un scénario saturé :
   à faire en vague 3 (informatif, jamais bloquant).
+- **Relevé (2026-09-23, début de vague 3) :** `tests/ui/canvas-mesure-frame.mesure.tsx` (hors `npm test`), 120 frames réelles
+  saturées (chaque frame : delta de 200 clics ⇒ `N_PROJECTILES_MAX` demandes, plus anciens supprimés à
+  chaque frame, le chemin le plus coûteux de `dessinerScene`). Machine : WSL2, Chromium headless
+  (Playwright, `@vitest/browser-playwright`), poste de développement (pas un runner CI dédié — chiffres
+  indicatifs, pas comparables d'une machine à l'autre, EXG-52 le dit explicitement informatif).
+  - **Effets complets** : médiane 0,00 ms, p95 0,10 ms, max 0,20 ms.
+  - Lecture : `performance.now()` est arrondi à 0,1 ms dans Chromium ; une médiane à 0,00 ms signifie « sous la
+    résolution de l’horloge », soit au moins 80 fois sous le budget de 16,7 ms d’une frame à 60 Hz.
+  - **Effets réduits (option performance activée, EXG-29)** : médiane 0,00 ms, p95 0,10 ms, max 0,10 ms —
+    cohérent avec `dessinerScene` qui retourne avant la boucle de projectiles dans ce mode.
+  - Rejouer : `npm run mesure:frame`
+    (les deux lignes `[EVAL-002] …` sont sur la sortie standard).
+  - Coût ajouté à `scripts/verify.sh` : ~+5,5 s en local (16,2 s → ~21,7 s), dû aux 2×120 vrais cycles
+    `requestAnimationFrame` (~2 s bloqués par le rafraîchissement écran à chacun des deux tests) — pas un
+    coût de calcul, un coût d'attente de vraies frames. Resté dans la porte de qualité (pas de seuil de
+    ms, jamais bloquant) faute d'un signal indiquant que 494 tests dont ceci dépasserait un budget fixé.
 
 ## EVAL-003 — Porte de qualité (2026-09-20)
 - **Mesure :** `bash scripts/verify.sh` vert (pureté domain/, aucune graine dans src/, typecheck, lint, test,

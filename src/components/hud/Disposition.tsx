@@ -1,9 +1,11 @@
 // Disposition HUD (T-19, spec §7 « disposition »). Bascule CSS pure entre deux mises en page — pas de
 // JS de détection de largeur (`matchMedia` reste réservé à `prefers-reduced-motion`, EXG-29/EXG-50) :
 //   - desktop (≥ 1024 px, `lg:`) : 3 colonnes — écoles | combat + sorts | améliorations/équipement/
-//     arbre d'Éclats/prestige — sous le bandeau haut ;
+//     arbre d'Éclats/prestige/arbre d'Ascension — sous le bandeau haut ;
 //   - mobile (< 1024 px) : combat + sorts fixes en haut, onglets Écoles / Améliorations / Prestige
-//     dessous (le regroupement « Améliorations » couvre améliorations + équipement + arbre d'Éclats).
+//     dessous (le regroupement « Améliorations » couvre améliorations + équipement + arbre d'Éclats ;
+//     l'onglet « Prestige » porte prestige, Ascension et l'arbre d'Ascension, qui se paie en Points
+//     d'Ascension gagnés juste au-dessus).
 //
 // Les deux arborescences existent toutes les deux dans le DOM ; seule celle qui correspond à la largeur
 // réelle est visible (`hidden`/`lg:hidden` → `display: none`), donc absente des requêtes de rôle et des
@@ -16,14 +18,20 @@ import { TEXTES_UI } from '../../donnees/textes-ui.ts'
 import type { StoreJeuApi } from '../../state/store.ts'
 import { BandeauHaut } from './BandeauHaut.tsx'
 import { BandeauLectureSeule } from './BandeauLectureSeule.tsx'
+import { EcranFin, selecteurFinAtteinte } from './EcranFin.tsx'
 import { EncartHorsLigne } from './EncartHorsLigne.tsx'
+import { EncartNarration } from './EncartNarration.tsx'
+import { EncartStockagePlein } from './EncartStockagePlein.tsx'
 import { useRaccourcisSorts } from './BarreSorts.tsx'
 import { PanneauAmeliorations } from './PanneauAmeliorations.tsx'
+import { PanneauArbreAscension } from './PanneauArbreAscension.tsx'
 import { PanneauArbreEclats } from './PanneauArbreEclats.tsx'
 import { PanneauCentral } from './PanneauCentral.tsx'
 import { PanneauEcoles } from './PanneauEcoles.tsx'
 import { PanneauEquipement } from './PanneauEquipement.tsx'
 import { PanneauPrestige } from './PanneauPrestige.tsx'
+import { PanneauQuetes } from './PanneauQuetes.tsx'
+import { useStoreJeu } from '../../state/hooks.ts'
 import { useUneModaleEstOuverte } from './modaleOuverteGlobale.ts'
 
 type OngletMobile = 'ecoles' | 'ameliorations' | 'prestige'
@@ -34,12 +42,17 @@ const ONGLETS: readonly { readonly id: OngletMobile; readonly libelle: string }[
   { id: 'prestige', libelle: TEXTES_UI.onglets.prestige },
 ]
 
-/** Améliorations + équipement + arbre d'Éclats : les trois guichets d'achat, sans le prestige. */
+/**
+ * Améliorations + équipement + quêtes + arbre d'Éclats. Les quêtes sont rangées juste après
+ * l'équipement : c'est leur Renommée qui le paie (EXG-10), le joueur voit d'où vient la monnaie à côté
+ * de ce qu'elle achète — même onglet « Améliorations » sur mobile.
+ */
 function ColonneAchats({ store }: { readonly store: StoreJeuApi }) {
   return (
     <>
       <PanneauAmeliorations store={store} />
       <PanneauEquipement store={store} />
+      <PanneauQuetes store={store} />
       <PanneauArbreEclats store={store} />
     </>
   )
@@ -57,6 +70,7 @@ function DispositionDesktop({ store }: { readonly store: StoreJeuApi }) {
       <div className="flex flex-col gap-2 overflow-y-auto">
         <ColonneAchats store={store} />
         <PanneauPrestige store={store} />
+        <PanneauArbreAscension store={store} />
       </div>
     </div>
   )
@@ -85,7 +99,12 @@ function DispositionMobile({ store }: { readonly store: StoreJeuApi }) {
       <div role="tabpanel" className="flex flex-col gap-2">
         {onglet === 'ecoles' && <PanneauEcoles store={store} />}
         {onglet === 'ameliorations' && <ColonneAchats store={store} />}
-        {onglet === 'prestige' && <PanneauPrestige store={store} />}
+        {onglet === 'prestige' && (
+          <>
+            <PanneauPrestige store={store} />
+            <PanneauArbreAscension store={store} />
+          </>
+        )}
       </div>
     </div>
   )
@@ -104,12 +123,20 @@ export function Disposition({ store }: { readonly store: StoreJeuApi }) {
   // géométrique automatisé.
   const modaleOuverte = useUneModaleEstOuverte()
 
+  // EXG-28 — écran de fin dédié dès que le moteur a figé les statistiques ; le joueur peut revenir au
+  // HUD (l'or continue de tomber), le choix ne vit que le temps de la session.
+  const finAtteinte = useStoreJeu(store, selecteurFinAtteinte)
+  const [finVue, setFinVue] = useState(false)
+  if (finAtteinte && !finVue) return <EcranFin store={store} onContinuer={() => setFinVue(true)} />
+
   return (
     <div className="min-h-screen bg-[var(--couleur-charbon-950)]">
       <div className={modaleOuverte ? 'hidden' : undefined} aria-hidden={modaleOuverte || undefined}>
         <BandeauHaut store={store} />
         <BandeauLectureSeule store={store} />
+        <EncartStockagePlein store={store} />
         <EncartHorsLigne store={store} />
+        <EncartNarration store={store} />
         {/* T-22, règle axe `region` : tout le contenu visible doit vivre dans un point de repère. Le
             bandeau haut est déjà un `<header>` ; le reste (bannières de statut + les deux dispositions,
             desktop caché en CSS + mobile visible) va dans ce `<main>` unique. */}

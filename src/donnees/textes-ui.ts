@@ -2,10 +2,10 @@
 // `equilibrage:empreinte` ne couvre que `src/donnees/constantes.ts`, celui-ci est attesté par revue et
 // par grep manuel (spec §7, note sous « Bibliothèque »).
 //
-// Noms de travail des écoles/sorts/améliorations/équipement/nœuds d'arbre (Feu, Glace, École 3…) :
-// la vague 3 (T-24 à T-27) les remplacera par le contenu définitif sans toucher aux identifiants du
-// moteur (`IdEcole`, `id` de `ParametresSort`/`ParametresAchatMultiplicatif`/`ParametresNoeudArbre`).
-// Ton du guide §7 : familier, jamais grandiloquent — même sur un texte de travail.
+// Les noms et descriptions de contenu (écoles, sorts, zones, quêtes, arbres, fin) ne sont pas ici : ils
+// vivent à côté de leurs nombres, dans `ecoles.ts`, `sorts.ts`, `zones.ts`, `quetes.ts`, `arbres.ts`,
+// `ameliorations.ts`, `equipement.ts` et `fin.ts` (vague 3). Ce fichier ne garde que le texte de
+// l'interface elle-même. Ton du guide §7 : familier, clair d'abord, jamais grandiloquent.
 
 export const TEXTES_UI = {
   titre: 'Magic Battle',
@@ -17,6 +17,7 @@ export const TEXTES_UI = {
     renommee: 'Renommée',
     eclats: 'Éclats',
     zone: 'Zone',
+    region: 'Région',
   },
 
   onglets: {
@@ -28,17 +29,11 @@ export const TEXTES_UI = {
   ecoles: {
     titre: 'Écoles',
     verrouillee: 'École scellée',
-    verrouilleeDetail: 'Un boss de zone la révélera.',
+    verrouilleeDetail: 'Un boss la garde sous clé. Tape-le, elle est à toi.',
+    // Écoles révélées par une Ascension (`requiertAscension`), pas par un boss de zone.
+    verrouilleeDetailAscension: 'Celle-là ne se gagne pas au combat. Il faudra t’élever un peu.',
     niveau: (niveau: number) => `Niveau ${niveau}`,
     acheter: 'Étudier',
-    noms: {
-      feu: 'Feu',
-      glace: 'Glace',
-      ecole3: 'École 3',
-      ecole4: 'École 4',
-      ecole5: 'École 5',
-      lumiere: 'Lumière',
-    } as const,
   },
 
   combat: {
@@ -51,7 +46,7 @@ export const TEXTES_UI = {
     // « PV 8 / 26.600198804687487 » en jeu réel).
     pv: (courants: string, max: string) => `PV ${courants} / ${max}`,
     timerBoss: (secondes: number) => `Boss — ${secondes} s`,
-    monstreVaincu: (nom: string) => `${nom || 'Le monstre'} est tombé.`,
+    monstreVaincu: (nom: string) => `${nom || 'Le monstre'} mord la poussière.`,
     bossEnApproche: (nom: string) => `${nom || 'Un boss'} entre en scène.`,
     interrupteurPerformance: 'Effets visuels de combat',
     performanceActivee: 'Effets réduits',
@@ -69,45 +64,88 @@ export const TEXTES_UI = {
 
   ameliorations: {
     titre: 'Améliorations',
-    sousTitre: 'Payées en or.',
+    sousTitre: 'Payées en or, celui qui bosse même quand tu dors.',
     acheter: 'Améliorer',
     palier: (palier: number) => `Palier ${palier}`,
-    noms: {
-      'amelioration-1': 'Bâton amplifié',
-      'amelioration-2': 'Grimoire renforcé',
-    } as const,
   },
 
   equipement: {
     titre: 'Équipement',
-    sousTitre: 'Payé en Renommée.',
+    sousTitre: 'Payé en Renommée. La gloire, ça se dépense aussi.',
     acheter: 'Équiper',
     palier: (palier: number) => `Palier ${palier}`,
-    noms: {
-      'equipement-1': 'Amulette',
-      'equipement-2': 'Anneau',
-    } as const,
   },
 
   arbreEclats: {
     titre: 'Arbre d’Éclats',
-    sousTitre: 'Remis à zéro à chaque Ascension.',
+    sousTitre: 'Remis à zéro à chaque Ascension. Profites-en tant que ça dure.',
     acheter: 'Investir',
     rang: (rang: number) => `Rang ${rang}`,
     rangMax: 'Rang maximal atteint',
     verrouille: 'Prérequis manquant',
-    noms: {
-      'eclats-degats-1': 'Frappe éclatante I',
-      'eclats-degats-2': 'Frappe éclatante II',
-      'eclats-degats-3': 'Frappe éclatante III',
-      'eclats-degats-infini': 'Frappe sans fond',
-      'eclats-or-1': 'Bourse enchantée I',
-      'eclats-or-2': 'Bourse enchantée II',
-      'eclats-or-3': 'Bourse enchantée III',
-      'eclats-zone-depart': 'Tremplin de zone',
-      'eclats-cooldown-1': 'Réflexes affûtés I',
-      'eclats-cooldown-2': 'Réflexes affûtés II',
-    } as const,
+  },
+
+  arbreAscension: {
+    titre: 'Arbre d’Ascension',
+    sousTitre: 'Permanent. Ce que tu prends ici, aucune Ascension ne te le reprend.',
+    // Le solde vit dans ce panneau, pas dans le bandeau : ces points ne bougent qu'à l'Ascension et ne
+    // se dépensent qu'ici.
+    solde: (points: string) => `Points d’Ascension : ${points}`,
+    acheter: (cout: string) => `Investir · ${cout} pt${cout === '1' ? '' : 's'}`,
+    rangSur: (rang: number, max: number) => `Rang ${rang} / ${max}`,
+    rangSansFin: (rang: number) => `Rang ${rang} · sans plafond`,
+    rangMax: 'Rang maximal atteint',
+    verrouille: 'Prérequis manquant',
+    prerequis: (noms: string) => `Il faut d’abord : ${noms}`,
+  },
+
+  zoneFinale: {
+    // Nom et description de la zone et du boss : `TEXTES_FIN` (`fin.ts`). Ici, l'habillage de l'encart.
+    titre: 'Zone finale',
+    ouverte: 'Assez d’Ascensions au compteur : une porte s’est ouverte au fond du couloir.',
+    boss: 'Derrière la porte',
+    chrono: (secondes: number) => `${secondes} s pour le battre. Raté ? Tu reviens quand tu veux, sans rien perdre.`,
+    entrer: 'Entrer dans le bureau',
+  },
+
+  quetes: {
+    titre: 'Quêtes',
+    sousTitre: 'Chacune paie sa Renommée une fois. Pas deux, on a vérifié.',
+    objectifZone: (zone: string) => `Objectif : atteindre la zone ${zone}`,
+    objectifMonstres: (nombre: string) => `Objectif : ${nombre} monstres au tapis`,
+    objectifPremierPrestige: 'Objectif : un premier prestige',
+    recompense: (renommee: string) => `+${renommee} Renommée`,
+    accomplie: 'Accomplie',
+    pasEncore: 'Pas encore',
+  },
+
+  narration: {
+    // Préfixe lu par les lecteurs d'écran seulement : l'encart s'annonce comme un bout d'histoire, pas
+    // comme une erreur ou un résumé chiffré.
+    etiquette: 'Histoire',
+  },
+
+  fin: {
+    // Le titre et les lignes de l'écran de fin viennent de `TEXTES_FIN` (`fin.ts`) ; ici, les libellés
+    // des statistiques et le bouton.
+    statistiques: 'Ta partie en chiffres',
+    duree: 'Temps de jeu',
+    zoneMax: 'Zone la plus lointaine',
+    ascensions: 'Ascensions',
+    prestiges: 'Prestiges',
+    continuer: 'Retourner voir l’or tomber',
+  },
+
+  stockagePlein: {
+    message:
+      'Ta progression n’est plus sauvegardée : le navigateur refuse d’en stocker davantage. Fais de la place dans ses données de sites, sinon tout ce que tu gagnes s’envole à la fermeture.',
+  },
+
+  // Durées affichées (encart hors-ligne, écran de fin) : les nombres arrivent déjà arrondis.
+  duree: {
+    minutes: (minutes: number) => `${minutes} min`,
+    heures: (heures: number) => `${heures} h`,
+    heuresMinutes: (heures: number, minutes: number) => `${heures} h ${minutes} min`,
   },
 
   commun: {
@@ -117,11 +155,11 @@ export const TEXTES_UI = {
 
   prestige: {
     titre: 'Prestige',
-    description: 'Recommence le run, garde des Éclats.',
+    description: 'Recommence le run, garde des Éclats. Oui, c’est voulu.',
     bouton: 'Prestiger',
     boutonVerrouille: 'Partie terminée',
     etape1Titre: 'Recommencer le run ?',
-    etape1Intro: (zone: number) => `Zone atteinte : ${zone}. Le run repart de zéro, mais rien n’est perdu pour de bon.`,
+    etape1Intro: (zone: number) => `Zone atteinte : ${zone}. Le run repart de zéro, tes Éclats restent.`,
     etape1Perte: (or: string, niveaux: number) => `Tu laisses ${or} or et ${niveaux} niveau${niveaux > 1 ? 'x' : ''} d’écoles derrière toi.`,
     etape1Continuer: 'Continuer',
     etape2Titre: 'Confirme le prestige',
@@ -155,7 +193,7 @@ export const TEXTES_UI = {
 
   horsLigne: {
     titre: 'Pendant ton absence',
-    resume: (or: string, duree: string) => `${duree} d’absence, ${or} or gagné.`,
+    resume: (or: string, duree: string) => `${duree} d’absence, ${or} or gagné. Lui au moins, il bosse.`,
     plafond: (or: string, duree: string) => `Absence plafonnée à ${duree} — ${or} or gagné, le reste n’a pas compté.`,
   },
 

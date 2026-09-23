@@ -13,7 +13,9 @@
 //  - confirmation prestige, étapes 1 et 2 ;
 //  - confirmation Ascension, étapes 1 et 2 ;
 //  - bandeau lecture seule ;
-//  - chaque onglet mobile (Écoles / Améliorations / Prestige), 375 px seulement (n'existe pas à 1440 px).
+//  - chaque onglet mobile (Écoles / Améliorations / Prestige), 375 px seulement (n'existe pas à 1440 px) ;
+//  - vague 3 : arbre d'Ascension et encart de zone finale (seuil d'Ascensions atteint par le moteur),
+//    puis combat final engagé (en-tête de zone finale, boss et chrono dans le miroir du canvas).
 //
 // Une régression trouvée en écrivant ce fichier (corrigée ici, pas contournée) : `opacity-70` sur les
 // cartes verrouillées (écoles scellées, sorts verrouillés) diluait le texte atténué vers le fond de page
@@ -36,7 +38,8 @@ import { EcranSauvegardeIllisible } from '../../src/components/hud/EcranSauvegar
 import { TEXTES_UI } from '../../src/donnees/textes-ui.ts'
 import { useStoreJeu } from '../../src/state/hooks.ts'
 import type { StoreJeuApi } from '../../src/state/store.ts'
-import { CLE_PRINCIPALE, T0, auditerSansViolation, creerStoreDeTest, visible } from './aide-audit.ts'
+import { CLE_PRINCIPALE, T0, apresAscensions, auditerSansViolation, creerStoreDeTest, visible } from './aide-audit.ts'
+import { CONSTANTES } from '../../src/donnees/constantes.ts'
 import { creerStockageFactice } from '../state/doubles.ts'
 
 function EcranChargement() {
@@ -209,5 +212,50 @@ describe('T-22 — audit axe-core, onglets mobiles (375 px seulement — absents
     await auditerSansViolation()
     unmount()
     store.arreter()
+  })
+})
+
+describe('vague 3 — audit axe-core, arbre d’Ascension et zone finale (EXG-28/EXG-40)', () => {
+  // Seuil de la zone finale atteint par le moteur, et des Points à dépenser : les deux éléments sont
+  // affichés, avec des boutons actifs et d'autres désactivés (prérequis manquant).
+  const etatFinal = apresAscensions(CONSTANTES.fin.nAscensionsRequises, (etat) => ({
+    bourse: { ...etat.bourse, pointsAscension: 3 },
+  }))
+
+  it('encart de zone finale puis arbre d’Ascension — 1440 et 375 px', async () => {
+    for (const [largeur, hauteur] of [[1440, 900] as const, [375, 800] as const]) {
+      await page.viewport(largeur, hauteur)
+      const store = creerStoreDeTest({ etatInitialFn: etatFinal })
+      const { getByRole, unmount } = render(<Disposition store={store} />)
+      try {
+        // Précondition : les deux éléments sont réellement affichés, sinon l'audit ne les verrait pas.
+        getByRole('region', { name: TEXTES_UI.zoneFinale.titre })
+        if (largeur < 1024) {
+          await auditerSansViolation()
+          await userEvent.click(getByRole('tab', { name: 'Prestige' }))
+        }
+        getByRole('region', { name: TEXTES_UI.arbreAscension.titre })
+        await auditerSansViolation()
+      } finally {
+        unmount()
+        store.arreter()
+      }
+    }
+  })
+
+  it('combat final engagé — 1440 et 375 px', async () => {
+    for (const [largeur, hauteur] of [[1440, 900] as const, [375, 800] as const]) {
+      await page.viewport(largeur, hauteur)
+      const store = creerStoreDeTest({ etatInitialFn: etatFinal })
+      const { getAllByTestId, getByRole, unmount } = render(<Disposition store={store} />)
+      try {
+        await userEvent.click(getByRole('button', { name: TEXTES_UI.zoneFinale.entrer }))
+        visible(getAllByTestId('timer-boss'))
+        await auditerSansViolation()
+      } finally {
+        unmount()
+        store.arreter()
+      }
+    }
   })
 })
